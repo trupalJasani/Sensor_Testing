@@ -11,9 +11,9 @@
 #include "freertos/task.h"
 
 #define I2C_MASTER_NUM          I2C_NUM_0    
-#define I2C_MASTER_SDA_IO       8            // Set your physical SDA GPIO pin
-#define I2C_MASTER_SCL_IO       9            // Set your physical SCL GPIO pin
-#define I2C_MASTER_FREQ_HZ      100000        // Standard 100kHz I2C Clock speed
+#define I2C_MASTER_SDA_IO       8         
+#define I2C_MASTER_SCL_IO       9        
+#define I2C_MASTER_FREQ_HZ      100000  
 
 static i2c_master_bus_handle_t  bus_handle;
 static i2c_master_dev_handle_t  dev_handle = NULL;
