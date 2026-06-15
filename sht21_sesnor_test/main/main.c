@@ -32,7 +32,7 @@ void app_main(void)
         ESP_LOGE(TAG, "Sensor Hardware Check Failed: No response acknowledged at address 0x40.");
         return;
     }
-
+    
     ESP_LOGI(TAG, "SHT21 Sensor active and listening on system bus pipeline.");
     
     float temperature = 0.0f;
