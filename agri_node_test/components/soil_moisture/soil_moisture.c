@@ -27,10 +27,11 @@ int32_t SoilMoisture_RegisterBusIO(SoilMoisture_Object_t *pObj, SoilMoisture_IO_
 int32_t SoilMoisture_Init(SoilMoisture_Object_t *pObj) {
     if (pObj == NULL) return SOIL_ERROR;
 
+    /* Capacitive sensors usually read high in air, low in water */
     pObj->cal_air_value   = 2800; // Dry
     pObj->cal_water_value = 1200; // Wet
-    pObj->is_initialized = 1;
     
+    pObj->is_initialized = 1;
     return SOIL_OK;
 }
 
@@ -50,13 +51,18 @@ int32_t SoilMoisture_GetRaw(SoilMoisture_Object_t *pObj, uint32_t *Value) {
 
 int32_t SoilMoisture_GetMoisturePercent(SoilMoisture_Object_t *pObj, float *Percentage) {
     uint32_t raw_val = 0;
-    if (SoilMoisture_GetRaw(pObj, &raw_val) != SOIL_OK) return SOIL_ERROR;
+    if (SoilMoisture_GetRaw(pObj, &raw_val) != SOIL_OK) {
+        return SOIL_ERROR;
+    }
 
+    /* Inverse Linear Interpolation */
+    /* Clamp values to prevent negative percentages or values > 100% */
     if (raw_val >= pObj->cal_air_value) {
         *Percentage = 0.0f;
     } else if (raw_val <= pObj->cal_water_value) {
         *Percentage = 100.0f;
     } else {
+        /* Calculate mapping between air and water */
         float range = (float)(pObj->cal_air_value - pObj->cal_water_value);
         float position = (float)(pObj->cal_air_value - raw_val);
         *Percentage = (position / range) * 100.0f;
