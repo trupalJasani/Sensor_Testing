@@ -1,0 +1,3 @@
+idf_component_register(SRCS "bsp.c"
+                       INCLUDE_DIRS "include"
+                       REQUIRES driver wio_e5)

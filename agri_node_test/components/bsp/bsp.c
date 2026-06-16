@@ -26,7 +26,7 @@
    ADC Configuration
    ================================ */
 #define SOIL_ADC_UNIT       ADC_UNIT_1
-#define SOIL_ADC_CHANNEL    ADC_CHANNEL_2      
+#define SOIL_ADC_CHANNEL    ADC_CHANNEL_0      
 
 static adc_oneshot_unit_handle_t adc1_handle = NULL;
 static SoilMoisture_Object_t SoilObj;

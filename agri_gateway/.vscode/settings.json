@@ -6,7 +6,7 @@
     "interface/ftdi/esp32_devkitj_v1.cfg",
     "target/esp32s3.cfg"
   ],
-  "idf.port": "/dev/ttyS2",
+  "idf.port": "/dev/ttyACM1",
   "idf.toolsPath": "/home/trupal/.espressif",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
@@ -16,5 +16,6 @@
     "--background-index",
     "--query-driver=/home/trupal/.espressif/tools/riscv32-esp-elf/esp-14.2.0_20241119/riscv32-esp-elf/bin/riscv32-esp-elf-gcc",
     "--compile-commands-dir=${workspaceFolder}/build"
-  ]
+  ],
+  "idf.flashType": "UART"
 }
