@@ -7,11 +7,112 @@
 #include "bsp.h"
 #include "wio_e5.h"
 
+/* --- Network & Cloud Includes --- */
+#include "esp_wifi.h"
+#include "esp_event.h"
+#include "nvs_flash.h"
+#include "esp_netif.h"
+#include "esp_http_client.h"
+
+#define WIFI_SSID "moto g(9) play_7240"
+#define WIFI_PASS "1234567890R"
+
+#define BLYNK_TEMPLATE_NAME "Agri Gateway"
+#define BLYNK_AUTH_TOKEN "L9hBfec12ocxjtNGqbAj--NpKTdc1Ae_"
+
 static const char *TAG = "AGRI_GATEWAY";
 static WioE5_Object_t lora_radio;
 
 /*-----------------------------------------------------------
- * Hex-to-ASCII Decoder
+ * Wi-Fi Background Manager
+ *----------------------------------------------------------*/
+static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+{
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
+    {
+        esp_wifi_connect();
+    }
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
+    {
+        ESP_LOGW("WIFI", "Disconnected. Reconnecting in background...");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        esp_wifi_connect();
+    }
+    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
+    {
+        ESP_LOGI("WIFI", "=======================================");
+        ESP_LOGI("WIFI", "WIFI CONNECTED! CLOUD BRIDGE ACTIVE.");
+        ESP_LOGI("WIFI", "=======================================");
+    }
+}
+
+static void Wifi_Init(void)
+{
+    /* NVS Flash is required to store Wi-Fi calibration data */
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_create_default_wifi_sta();
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
+
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = WIFI_SSID,
+            .password = WIFI_PASS,
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+        },
+    };
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
+}
+
+/*-----------------------------------------------------------
+ * Blynk Cloud Transmission (REST API)
+ *----------------------------------------------------------*/
+static void Blynk_Update(float temp, float hum, float moist)
+{
+    char url[256];
+    /* Blynk Batch Update API: Updates V1 (Temp), V2 (Hum), and V3 (Moist) simultaneously */
+    snprintf(url, sizeof(url),
+             "http://blynk.cloud/external/api/batch/update?token=%s&V0=%.1f&V1=%.1f&V2=%.1f",
+             BLYNK_AUTH_TOKEN, temp, hum, moist);
+
+    esp_http_client_config_t config = {
+        .url = url,
+        .method = HTTP_METHOD_GET,
+        .timeout_ms = 5000,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_err_t err = esp_http_client_perform(client);
+
+    if (err == ESP_OK)
+    {
+        ESP_LOGI("CLOUD", "Successfully pushed data to Blynk Dashboard!");
+    }
+    else
+    {
+        ESP_LOGE("CLOUD", "Failed to reach Blynk Server. Wi-Fi dropping?");
+    }
+    esp_http_client_cleanup(client);
+}
+
+/*-----------------------------------------------------------
+ * Hex-to-ASCII Decoder & Cloud Trigger
  *----------------------------------------------------------*/
 static void ParseAndPrintPayload(const char *raw_packet)
 {
@@ -43,6 +144,19 @@ static void ParseAndPrintPayload(const char *raw_packet)
     ESP_LOGW("LORA_RX", "=======================================");
     ESP_LOGW("LORA_RX", "CROP SENSOR DATA: %s", decoded_message);
     ESP_LOGW("LORA_RX", "=======================================\n");
+
+    /* EXTRACT DATA AND SEND TO CLOUD */
+    float temp_val = 0, hum_val = 0, moist_val = 0;
+
+    /* Using sscanf to strip the variables directly out of "T:28.4,H:37.1,M:0.0%" */
+    if (sscanf(decoded_message, "T:%f,H:%f,M:%f%%", &temp_val, &hum_val, &moist_val) == 3)
+    {
+        Blynk_Update(temp_val, hum_val, moist_val);
+    }
+    else
+    {
+        ESP_LOGE("CLOUD", "String format mismatch. Cloud update aborted.");
+    }
 }
 
 /*-----------------------------------------------------------
@@ -55,11 +169,7 @@ static esp_err_t Gateway_Init(void)
     WioE5_IO_t lora_io = {NULL, bsp_uart_write, bsp_uart_read, BSP_Delay};
 
     if (WioE5_RegisterBusIO(&lora_radio, &lora_io) != 0)
-    {
-        ESP_LOGE(TAG, "LoRa RegisterBusIO failed");
         return ESP_FAIL;
-    }
-
     WIO_E5_Driver.Init(&lora_radio);
 
     if (WIO_E5_Driver.Ping(&lora_radio) == 0)
@@ -74,7 +184,6 @@ static esp_err_t Gateway_Init(void)
     WIO_E5_Driver.ConfigP2P(&lora_radio);
     WIO_E5_Driver.StartReceive(&lora_radio);
 
-    ESP_LOGI(TAG, "Gateway Listening for Crop Data on EU868 (SF10)...");
     return ESP_OK;
 }
 
@@ -83,9 +192,13 @@ static esp_err_t Gateway_Init(void)
  *----------------------------------------------------------*/
 void app_main(void)
 {
-    BSP_Delay(2000); /* Safety delay for power spikes */
+    BSP_Delay(2000);
     ESP_LOGI(TAG, "Starting Agriculture Gateway (ESP32-S3)...");
 
+    /* 1. Initialize Wi-Fi immediately so it connects in the background */
+    Wifi_Init();
+
+    /* 2. Initialize LoRa Radio */
     if (Gateway_Init() != ESP_OK)
     {
         ESP_LOGE(TAG, "Gateway initialization failed. Halting.");
@@ -94,7 +207,7 @@ void app_main(void)
 
     uint8_t rx_buffer[256];
     TickType_t last_packet_time = xTaskGetTickCount();
-    const TickType_t TIMEOUT_TICKS = pdMS_TO_TICKS(45000); /* 45-second hardware watchdog */
+    const TickType_t TIMEOUT_TICKS = pdMS_TO_TICKS(45000);
 
     while (1)
     {
@@ -103,26 +216,20 @@ void app_main(void)
 
         if (bytes > 0)
         {
-            /* 1. PRINT EVERYTHING: Expose the Wio-E5's internal state */
             ESP_LOGI("RAW_UART", "%s", rx_buffer);
 
-            /* 2. SUCCESSFUL PACKET: Decode it and Re-arm the radio */
             if (strstr((char *)rx_buffer, "RX \"") != NULL)
             {
                 ParseAndPrintPayload((char *)rx_buffer);
                 last_packet_time = xTaskGetTickCount();
-
-                /* The Wio-E5 stops listening after 1 packet. We MUST re-arm it! */
                 WIO_E5_Driver.StartReceive(&lora_radio);
             }
-            /* 3. TIMEOUT: The Wio-E5 gave up listening. Re-arm it! */
             else if (strstr((char *)rx_buffer, "TIMEOUT") != NULL)
             {
                 WIO_E5_Driver.StartReceive(&lora_radio);
             }
         }
 
-        /* 4. WATCHDOG: Total system lockup recovery */
         if ((xTaskGetTickCount() - last_packet_time) > TIMEOUT_TICKS)
         {
             ESP_LOGE(TAG, "WATCHDOG: No valid packets for 45 seconds. Hard Re-arm!");
