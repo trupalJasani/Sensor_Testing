@@ -96,7 +96,7 @@ static void Blynk_Update(float temp, float hum, float moist, float leaf)
 
     /* ADDED: &V3=%.1f to catch the Leaf Wetness data */
     snprintf(url, sizeof(url),
-             "http://blynk.cloud/external/api/batch/update?token=%s&V0=%.3f&V1=%.3f&V2=%.3f&V3=%.3f",
+             "http://blynk.cloud/external/api/batch/update?token=%s&V0=%.2f&V1=%.2f&V2=%.2f&V3=%.2f",
              BLYNK_AUTH_TOKEN, temp, hum, moist, leaf);
 
     esp_http_client_config_t config = {
