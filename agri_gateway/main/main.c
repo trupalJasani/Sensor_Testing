@@ -22,8 +22,8 @@
 #include "esp_http_client.h"
 
 /* --- UPDATE THESE FOR YOUR MOBILE HOTSPOT --- */
-#define WIFI_SSID "moto g(9) play_7240"
-#define WIFI_PASS "YOUR_WIFI_PASSWORD"
+#define WIFI_SSID "Trupal’s iPhone"
+#define WIFI_PASS "Trupal@123"
 
 #define BLYNK_TEMPLATE_NAME "Agri Gateway"
 #define BLYNK_AUTH_TOKEN "L9hBfec12ocxjtNGqbAj--NpKTdc1Ae_"
@@ -96,7 +96,7 @@ static void Blynk_Update(float temp, float hum, float moist, float leaf)
 
     /* ADDED: &V3=%.1f to catch the Leaf Wetness data */
     snprintf(url, sizeof(url),
-             "http://blynk.cloud/external/api/batch/update?token=%s&V0=%.1f&V1=%.1f&V2=%.1f&V3=%.1f",
+             "http://blynk.cloud/external/api/batch/update?token=%s&V0=%.3f&V1=%.3f&V2=%.3f&V3=%.3f",
              BLYNK_AUTH_TOKEN, temp, hum, moist, leaf);
 
     esp_http_client_config_t config = {
