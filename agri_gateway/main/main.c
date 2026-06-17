@@ -1,3 +1,10 @@
+/**
+ ******************************************************************************
+ * @file    main.c
+ * @brief   Gateway application entry point (LoRa to Wi-Fi Cloud Bridge)
+ ******************************************************************************
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -14,8 +21,9 @@
 #include "esp_netif.h"
 #include "esp_http_client.h"
 
+/* --- UPDATE THESE FOR YOUR MOBILE HOTSPOT --- */
 #define WIFI_SSID "moto g(9) play_7240"
-#define WIFI_PASS "1234567890R"
+#define WIFI_PASS "YOUR_WIFI_PASSWORD"
 
 #define BLYNK_TEMPLATE_NAME "Agri Gateway"
 #define BLYNK_AUTH_TOKEN "L9hBfec12ocxjtNGqbAj--NpKTdc1Ae_"
@@ -48,7 +56,6 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 
 static void Wifi_Init(void)
 {
-    /* NVS Flash is required to store Wi-Fi calibration data */
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
@@ -83,13 +90,14 @@ static void Wifi_Init(void)
 /*-----------------------------------------------------------
  * Blynk Cloud Transmission (REST API)
  *----------------------------------------------------------*/
-static void Blynk_Update(float temp, float hum, float moist)
+static void Blynk_Update(float temp, float hum, float moist, float leaf)
 {
     char url[256];
-    /* Blynk Batch Update API: Updates V1 (Temp), V2 (Hum), and V3 (Moist) simultaneously */
+
+    /* ADDED: &V3=%.1f to catch the Leaf Wetness data */
     snprintf(url, sizeof(url),
-             "http://blynk.cloud/external/api/batch/update?token=%s&V0=%.1f&V1=%.1f&V2=%.1f",
-             BLYNK_AUTH_TOKEN, temp, hum, moist);
+             "http://blynk.cloud/external/api/batch/update?token=%s&V0=%.1f&V1=%.1f&V2=%.1f&V3=%.1f",
+             BLYNK_AUTH_TOKEN, temp, hum, moist, leaf);
 
     esp_http_client_config_t config = {
         .url = url,
@@ -102,7 +110,7 @@ static void Blynk_Update(float temp, float hum, float moist)
 
     if (err == ESP_OK)
     {
-        ESP_LOGI("CLOUD", "Successfully pushed data to Blynk Dashboard!");
+        ESP_LOGI("CLOUD", "Successfully pushed 4 variables to Blynk Dashboard!");
     }
     else
     {
@@ -145,13 +153,13 @@ static void ParseAndPrintPayload(const char *raw_packet)
     ESP_LOGW("LORA_RX", "CROP SENSOR DATA: %s", decoded_message);
     ESP_LOGW("LORA_RX", "=======================================\n");
 
-    /* EXTRACT DATA AND SEND TO CLOUD */
-    float temp_val = 0, hum_val = 0, moist_val = 0;
+    /* EXTRACT 4 DATA POINTS AND SEND TO CLOUD */
+    float temp_val = 0, hum_val = 0, moist_val = 0, leaf_val = 0;
 
-    /* Using sscanf to strip the variables directly out of "T:28.4,H:37.1,M:0.0%" */
-    if (sscanf(decoded_message, "T:%f,H:%f,M:%f%%", &temp_val, &hum_val, &moist_val) == 3)
+    /* Updated string matcher: Notice the L:%f no longer has a %% after it */
+    if (sscanf(decoded_message, "T:%f,H:%f,M:%f%%,L:%f", &temp_val, &hum_val, &moist_val, &leaf_val) == 4)
     {
-        Blynk_Update(temp_val, hum_val, moist_val);
+        Blynk_Update(temp_val, hum_val, moist_val, leaf_val);
     }
     else
     {
@@ -195,10 +203,8 @@ void app_main(void)
     BSP_Delay(2000);
     ESP_LOGI(TAG, "Starting Agriculture Gateway (ESP32-S3)...");
 
-    /* 1. Initialize Wi-Fi immediately so it connects in the background */
     Wifi_Init();
 
-    /* 2. Initialize LoRa Radio */
     if (Gateway_Init() != ESP_OK)
     {
         ESP_LOGE(TAG, "Gateway initialization failed. Halting.");

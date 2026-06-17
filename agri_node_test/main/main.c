@@ -17,7 +17,7 @@
 #include "bsp.h"
 #include "wio_e5.h"
 
-#define SENSOR_PERIOD_MS    (15000U) /* 15 Seconds to protect LoRa duty cycle */
+#define SENSOR_PERIOD_MS (15000U) /* 15 Seconds to protect LoRa duty cycle */
 
 static const char *TAG = "AGRI_NODE";
 
@@ -31,17 +31,18 @@ static WioE5_Object_t lora_radio;
 static esp_err_t LoRa_Init(void)
 {
     bsp_uart_init();
-    
-    WioE5_IO_t lora_io = { NULL, bsp_uart_write, bsp_uart_read, BSP_Delay };
-    
-    if (WioE5_RegisterBusIO(&lora_radio, &lora_io) != 0) {
+
+    WioE5_IO_t lora_io = {NULL, bsp_uart_write, bsp_uart_read, BSP_Delay};
+
+    if (WioE5_RegisterBusIO(&lora_radio, &lora_io) != 0)
+    {
         ESP_LOGE(TAG, "LoRa RegisterBusIO failed");
         return ESP_FAIL;
     }
-    
+
     WIO_E5_Driver.Init(&lora_radio);
     WIO_E5_Driver.ConfigP2P(&lora_radio);
-    
+
     ESP_LOGI(TAG, "LoRa Wio-E5 initialized (P2P Mode)");
     return ESP_OK;
 }
@@ -62,7 +63,6 @@ static esp_err_t Sensors_Init(void)
         ESP_LOGE(TAG, "SHT31 initialization failed");
         return ESP_FAIL;
     }
-
     ESP_LOGI(TAG, "SHT31 initialized");
 
     if (BSP_SOIL_Init() != 0)
@@ -70,8 +70,15 @@ static esp_err_t Sensors_Init(void)
         ESP_LOGE(TAG, "Soil sensor initialization failed");
         return ESP_FAIL;
     }
-
     ESP_LOGI(TAG, "Soil moisture sensor initialized");
+
+    /* ADDED: Leaf Wetness Initialization */
+    if (BSP_LEAF_Init() != 0)
+    {
+        ESP_LOGE(TAG, "Leaf sensor initialization failed");
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "Leaf wetness sensor initialized");
 
     return ESP_OK;
 }
@@ -124,6 +131,21 @@ static void Read_Soil(float *moisture)
 }
 
 /*-----------------------------------------------------------
+ * Read Leaf Sensor (Using Pointers to extract data)
+ *----------------------------------------------------------*/
+static void Read_Leaf(float *wetness)
+{
+    if (BSP_LEAF_GetWetness(wetness) != 0)
+    {
+        ESP_LOGE(TAG, "Leaf wetness read failed");
+        *wetness = 0.0f;
+        return;
+    }
+
+    ESP_LOGI(TAG, "Leaf Wetness: %.2f%%", *wetness);
+}
+
+/*-----------------------------------------------------------
  * Main Application
  *----------------------------------------------------------*/
 void app_main(void)
@@ -148,7 +170,7 @@ void app_main(void)
     ESP_LOGI(TAG, "========================================");
 
     char payload[64];
-    float current_temp, current_hum, current_moisture;
+    float current_temp, current_hum, current_moisture, current_leaf; /* Added current_leaf */
 
     while (1)
     {
@@ -157,10 +179,11 @@ void app_main(void)
         /* 1. Extract Data */
         Read_SHT31(&current_temp, &current_hum);
         Read_Soil(&current_moisture);
+        Read_Leaf(&current_leaf); /* Added Leaf Read */
 
-        /* 2. Format LoRa Payload */
-        snprintf(payload, sizeof(payload), "T:%.1f,H:%.1f,M:%.1f%%", 
-                 current_temp, current_hum, current_moisture);
+        /* Formats payload as: T:25.9,H:52.5,M:0.0%,L:15.0 */
+        snprintf(payload, sizeof(payload), "T:%.1f,H:%.1f,M:%.1f%%,L:%.1f",
+                 current_temp, current_hum, current_moisture, current_leaf);
 
         /* 3. Broadcast */
         ESP_LOGI(TAG, "Broadcasting Payload: %s", payload);

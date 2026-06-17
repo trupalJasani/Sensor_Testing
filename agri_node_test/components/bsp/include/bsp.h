@@ -35,6 +35,10 @@ int32_t BSP_SOIL_DeInit(void);
 int32_t BSP_SOIL_GetRaw(uint32_t *raw);
 int32_t BSP_SOIL_GetMoisture(float *percent);
 
+/* --- Leaf Wetness Sensor (via Analog ADC) --- */
+int32_t BSP_LEAF_Init(void);
+int32_t BSP_LEAF_GetWetness(float *percent);
+
 #ifdef __cplusplus
 }
 #endif

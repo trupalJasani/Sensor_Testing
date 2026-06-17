@@ -1,3 +1,3 @@
 idf_component_register(SRCS "main.c"
                     INCLUDE_DIRS "."
-                    REQUIRES bsp sht31 soil_moisture wio_e5)
+                    REQUIRES bsp sht31 soil_moisture wio_e5 leaf_wetness_sensor)
