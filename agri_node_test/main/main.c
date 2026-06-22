@@ -31,7 +31,7 @@ typedef enum {
     STATE_INIT,
     STATE_READ_SENSORS,
     STATE_TRANSMIT,
-    STATE_IDLE, /* Replaced Deep Sleep with standard Idle */
+    STATE_IDLE,
     STATE_ERROR
 } NodeState_t;
 
@@ -181,7 +181,7 @@ void app_main(void)
             case STATE_IDLE:
                 ESP_LOGI(TAG, ">>> STATE: IDLE (Waiting %d ms)", SENSOR_PERIOD_MS);
                 
-                /* Keep the CPU awake, just pause this specific task for 15 seconds */
+                /*Just pause this specific task for 15 seconds */
                 vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(SENSOR_PERIOD_MS));
                 
                 current_state = STATE_READ_SENSORS;
