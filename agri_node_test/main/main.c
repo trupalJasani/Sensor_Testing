@@ -9,6 +9,5 @@
 
 void app_main(void)
 {
-    /* Hand over control to the application module */
     vc_application_start();
 }
