@@ -22,8 +22,8 @@
 #include "esp_http_client.h"
 
 /* --- UPDATE THESE FOR YOUR MOBILE HOTSPOT --- */
-#define WIFI_SSID "FRITZ!Box 5530 OM"
-#define WIFI_PASS "65521683568401574615"
+#define WIFI_SSID "Trupal’s iPhone"
+#define WIFI_PASS "Trupal@123"
 
 #define BLYNK_TEMPLATE_NAME "Agri Gateway"
 #define BLYNK_AUTH_TOKEN "L9hBfec12ocxjtNGqbAj--NpKTdc1Ae_"

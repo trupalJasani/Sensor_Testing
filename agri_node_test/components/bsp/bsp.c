@@ -8,7 +8,7 @@
 #include "sht31.h"
 #include "driver/i2c_master.h"
 #include "soil_moisture.h"
-#include "leaf_wetness.h" 
+#include "leaf_wetness.h"
 #include "esp_adc/adc_oneshot.h"
 #include "driver/uart.h"
 #include "esp_err.h"
@@ -148,7 +148,8 @@ SHT31_IO_t BSP_SHT31 = {
 static int32_t BSP_ADC_Init(void)
 {
     /* Protect against double initialization */
-    if (adc1_handle != NULL) return 0; 
+    if (adc1_handle != NULL)
+        return 0;
 
     adc_oneshot_unit_init_cfg_t init_config1 = {
         .unit_id = SOIL_ADC_UNIT,
@@ -160,17 +161,20 @@ static int32_t BSP_ADC_Init(void)
         .bitwidth = ADC_BITWIDTH_DEFAULT,
         .atten = ADC_ATTEN_DB_12,
     };
-    
+
     /* Initialize BOTH channels here */
-    if (adc_oneshot_config_channel(adc1_handle, SOIL_ADC_CHANNEL, &config) != ESP_OK) return -1;
-    if (adc_oneshot_config_channel(adc1_handle, LEAF_ADC_CHANNEL, &config) != ESP_OK) return -1;
-    
+    if (adc_oneshot_config_channel(adc1_handle, SOIL_ADC_CHANNEL, &config) != ESP_OK)
+        return -1;
+    if (adc_oneshot_config_channel(adc1_handle, LEAF_ADC_CHANNEL, &config) != ESP_OK)
+        return -1;
+
     return 0;
 }
 
 static int32_t BSP_ADC_DeInit(void)
 {
-    if (adc1_handle != NULL) {
+    if (adc1_handle != NULL)
+    {
         adc_oneshot_del_unit(adc1_handle);
         adc1_handle = NULL;
     }
@@ -180,9 +184,11 @@ static int32_t BSP_ADC_DeInit(void)
 /* Specific Read Function for Soil (Pin 0) */
 static int32_t BSP_ADC_Read_Soil(uint32_t *value)
 {
-    if (value == NULL || adc1_handle == NULL) return -1;
+    if (value == NULL || adc1_handle == NULL)
+        return -1;
     int esp_adc_val = 0;
-    if (adc_oneshot_read(adc1_handle, SOIL_ADC_CHANNEL, &esp_adc_val) == ESP_OK) {
+    if (adc_oneshot_read(adc1_handle, SOIL_ADC_CHANNEL, &esp_adc_val) == ESP_OK)
+    {
         *value = (uint32_t)esp_adc_val;
         return 0;
     }
@@ -192,9 +198,11 @@ static int32_t BSP_ADC_Read_Soil(uint32_t *value)
 /* Specific Read Function for Leaf (Pin 1) */
 static int32_t BSP_ADC_Read_Leaf(uint32_t *value)
 {
-    if (value == NULL || adc1_handle == NULL) return -1;
+    if (value == NULL || adc1_handle == NULL)
+        return -1;
     int esp_adc_val = 0;
-    if (adc_oneshot_read(adc1_handle, LEAF_ADC_CHANNEL, &esp_adc_val) == ESP_OK) {
+    if (adc_oneshot_read(adc1_handle, LEAF_ADC_CHANNEL, &esp_adc_val) == ESP_OK)
+    {
         *value = (uint32_t)esp_adc_val;
         return 0;
     }
@@ -202,15 +210,16 @@ static int32_t BSP_ADC_Read_Leaf(uint32_t *value)
 }
 
 /* IO Struct Mapping */
-static SoilMoisture_IO_t Soil_IO = { BSP_ADC_Init, BSP_ADC_DeInit, BSP_ADC_Read_Soil };
-static LeafSensor_IO_t   Leaf_IO = { BSP_ADC_Init, NULL, BSP_ADC_Read_Leaf };
+static SoilMoisture_IO_t Soil_IO = {BSP_ADC_Init, BSP_ADC_DeInit, BSP_ADC_Read_Soil};
+static LeafSensor_IO_t Leaf_IO = {BSP_ADC_Init, NULL, BSP_ADC_Read_Leaf};
 
 /* ==================================
    CUSTOM SENSOR WRAPPER API
    ================================== */
 int32_t BSP_SOIL_Init(void)
 {
-    if (SoilMoisture_RegisterBusIO(&SoilObj, &Soil_IO) != 0) return -1;
+    if (SoilMoisture_RegisterBusIO(&SoilObj, &Soil_IO) != 0)
+        return -1;
     return SoilMoisture_Init(&SoilObj);
 }
 
@@ -232,7 +241,8 @@ int32_t BSP_SOIL_GetMoisture(float *percent)
 /* New Leaf Wrappers */
 int32_t BSP_LEAF_Init(void)
 {
-    if (LeafSensor_RegisterBusIO(&LeafObj, &Leaf_IO) != 0) return -1;
+    if (LeafSensor_RegisterBusIO(&LeafObj, &Leaf_IO) != 0)
+        return -1;
     return LeafSensor_Init(&LeafObj);
 }
 

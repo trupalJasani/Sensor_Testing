@@ -12,7 +12,7 @@
 #include "freertos/task.h"
 
 #include "esp_log.h"
-#include "esp_system.h" 
+#include "esp_system.h"
 
 #include "sht31.h"
 #include "bsp.h"
@@ -24,7 +24,8 @@
 static const char *TAG = "AGRI_NODE_FSM";
 
 /* --- Finite State Machine Definitions --- */
-typedef enum {
+typedef enum
+{
     STATE_INIT,
     STATE_READ_SENSORS,
     STATE_TRANSMIT,
@@ -51,7 +52,8 @@ static esp_err_t LoRa_Init(void)
     bsp_uart_init();
     WioE5_IO_t lora_io = {NULL, bsp_uart_write, bsp_uart_read, BSP_Delay};
 
-    if (WioE5_RegisterBusIO(&lora_radio, &lora_io) != 0) {
+    if (WioE5_RegisterBusIO(&lora_radio, &lora_io) != 0)
+    {
         ESP_LOGE(TAG, "LoRa RegisterBusIO failed");
         return ESP_FAIL;
     }
@@ -68,19 +70,22 @@ static esp_err_t LoRa_Init(void)
  *----------------------------------------------------------*/
 static esp_err_t Sensors_Init(void)
 {
-    if (SHT31_RegisterBusIO(&sht31_sensor, &BSP_SHT31) != SHT31_OK || SHT31_Init(&sht31_sensor) != SHT31_OK) {
+    if (SHT31_RegisterBusIO(&sht31_sensor, &BSP_SHT31) != SHT31_OK || SHT31_Init(&sht31_sensor) != SHT31_OK)
+    {
         ESP_LOGE(TAG, "SHT31 initialization failed");
         return ESP_FAIL;
     }
     ESP_LOGI(TAG, "SHT31 initialized");
 
-    if (BSP_SOIL_Init() != 0) {
+    if (BSP_SOIL_Init() != 0)
+    {
         ESP_LOGE(TAG, "Soil sensor initialization failed");
         return ESP_FAIL;
     }
     ESP_LOGI(TAG, "Soil moisture sensor initialized");
 
-    if (BSP_LEAF_Init() != 0) {
+    if (BSP_LEAF_Init() != 0)
+    {
         ESP_LOGE(TAG, "Leaf sensor initialization failed");
         return ESP_FAIL;
     }
@@ -94,9 +99,12 @@ static esp_err_t Sensors_Init(void)
  *----------------------------------------------------------*/
 static void Read_SHT31(float *temperature, float *humidity)
 {
-    if (SHT31_GetTempHum(&sht31_sensor, temperature, humidity) == SHT31_OK) {
+    if (SHT31_GetTempHum(&sht31_sensor, temperature, humidity) == SHT31_OK)
+    {
         ESP_LOGI(TAG, "Temperature: %.2f C | Humidity: %.2f %%RH", *temperature, *humidity);
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "SHT31 read failed");
         *temperature = 0.0f;
         *humidity = 0.0f;
@@ -106,9 +114,12 @@ static void Read_SHT31(float *temperature, float *humidity)
 static void Read_Soil(float *moisture)
 {
     uint32_t raw_adc;
-    if (BSP_SOIL_GetRaw(&raw_adc) == 0 && BSP_SOIL_GetMoisture(moisture) == 0) {
+    if (BSP_SOIL_GetRaw(&raw_adc) == 0 && BSP_SOIL_GetMoisture(moisture) == 0)
+    {
         ESP_LOGI(TAG, "Soil Raw ADC: %" PRIu32 " | Moisture: %.2f%%", raw_adc, *moisture);
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "Soil sensor read failed");
         *moisture = 0.0f;
     }
@@ -116,9 +127,12 @@ static void Read_Soil(float *moisture)
 
 static void Read_Leaf(float *wetness)
 {
-    if (BSP_LEAF_GetWetness(wetness) == 0) {
+    if (BSP_LEAF_GetWetness(wetness) == 0)
+    {
         ESP_LOGI(TAG, "Leaf Wetness: %.2f", *wetness);
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "Leaf wetness read failed");
         *wetness = 0.0f;
     }
@@ -139,55 +153,58 @@ void vc_application_start(void)
     {
         switch (current_state)
         {
-            case STATE_INIT:
-                ESP_LOGI(TAG, ">>> STATE: INIT");
-                if (Sensors_Init() == ESP_OK && LoRa_Init() == ESP_OK) {
-                    ESP_LOGI(TAG, "========================================");
-                    ESP_LOGI(TAG, "SYSTEM ONLINE. COMMENCING DATA BROADCAST");
-                    ESP_LOGI(TAG, "========================================");
-                    
-                    last_wake_time = xTaskGetTickCount();
-                    current_state = STATE_READ_SENSORS;
-                } else {
-                    current_state = STATE_ERROR;
-                }
-                break;
+        case STATE_INIT:
+            ESP_LOGI(TAG, ">>> STATE: INIT");
+            if (Sensors_Init() == ESP_OK && LoRa_Init() == ESP_OK)
+            {
+                ESP_LOGI(TAG, "========================================");
+                ESP_LOGI(TAG, "SYSTEM ONLINE. COMMENCING DATA BROADCAST");
+                ESP_LOGI(TAG, "========================================");
 
-            case STATE_READ_SENSORS:
-                ESP_LOGI(TAG, ">>> STATE: READ SENSORS");
-                Read_SHT31(&current_temp, &current_hum);
-                Read_Soil(&current_moisture);
-                Read_Leaf(&current_leaf);
-                
-                current_state = STATE_TRANSMIT;
-                break;
-
-            case STATE_TRANSMIT:
-                ESP_LOGI(TAG, ">>> STATE: TRANSMIT");
-                
-                snprintf(payload, sizeof(payload), "T:%.3f,H:%.3f,M:%.3f%%,L:%.3f",
-                         current_temp, current_hum, current_moisture, current_leaf);
-
-                ESP_LOGI(TAG, "Broadcasting Payload: %s", payload);
-                WIO_E5_Driver.SendHexPayload(&lora_radio, (const uint8_t *)payload, strlen(payload));
-                
-                current_state = STATE_IDLE;
-                break;
-
-            case STATE_IDLE:
-                ESP_LOGI(TAG, ">>> STATE: IDLE (Waiting %d ms)", SENSOR_PERIOD_MS);
-                
-                vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(SENSOR_PERIOD_MS));
+                last_wake_time = xTaskGetTickCount();
                 current_state = STATE_READ_SENSORS;
-                break;
+            }
+            else
+            {
+                current_state = STATE_ERROR;
+            }
+            break;
 
-            case STATE_ERROR:
-                ESP_LOGE(TAG, ">>> STATE: ERROR - Critical Hardware Failure!");
-                ESP_LOGE(TAG, "Rebooting node in 5 seconds to attempt recovery...");
-                
-                BSP_Delay(5000);
-                esp_restart();
-                break;
+        case STATE_READ_SENSORS:
+            ESP_LOGI(TAG, ">>> STATE: READ SENSORS");
+            Read_SHT31(&current_temp, &current_hum);
+            Read_Soil(&current_moisture);
+            Read_Leaf(&current_leaf);
+
+            current_state = STATE_TRANSMIT;
+            break;
+
+        case STATE_TRANSMIT:
+            ESP_LOGI(TAG, ">>> STATE: TRANSMIT");
+
+            snprintf(payload, sizeof(payload), "T:%.2f,H:%.2f,M:%.2f%%,L:%.2f",
+                     current_temp, current_hum, current_moisture, current_leaf);
+
+            ESP_LOGI(TAG, "Broadcasting Payload: %s", payload);
+            WIO_E5_Driver.SendHexPayload(&lora_radio, (const uint8_t *)payload, strlen(payload));
+
+            current_state = STATE_IDLE;
+            break;
+
+        case STATE_IDLE:
+            ESP_LOGI(TAG, ">>> STATE: IDLE (Waiting %d ms)", SENSOR_PERIOD_MS);
+
+            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(SENSOR_PERIOD_MS));
+            current_state = STATE_READ_SENSORS;
+            break;
+
+        case STATE_ERROR:
+            ESP_LOGE(TAG, ">>> STATE: ERROR - Critical Hardware Failure!");
+            ESP_LOGE(TAG, "Rebooting node in 5 seconds to attempt recovery...");
+
+            BSP_Delay(5000);
+            esp_restart();
+            break;
         }
     }
 }

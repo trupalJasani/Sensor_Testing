@@ -99,14 +99,18 @@ static int32_t WioE5_ConfigP2P(WioE5_Object_t *pObj)
     return WIO_OK;
 }
 
-static int32_t WioE5_SendHexPayload(WioE5_Object_t *pObj, const uint8_t *Payload, uint8_t Length) {
-    if (pObj == NULL || !pObj->is_initialized || Payload == NULL) return WIO_ERROR;
+static int32_t WioE5_SendHexPayload(WioE5_Object_t *pObj, const uint8_t *Payload, uint8_t Length)
+{
+    if (pObj == NULL || !pObj->is_initialized || Payload == NULL)
+        return WIO_ERROR;
 
     /* FIXED: Changed TX to TXLRPKT so the Wio-E5 recognizes the Hex payload */
     int offset = snprintf(tx_buffer, CMD_BUFFER_SIZE, "AT+TEST=TXLRPKT,\"");
 
-    for (uint8_t i = 0; i < Length; i++) {
-        if (offset >= CMD_BUFFER_SIZE - 4) break; 
+    for (uint8_t i = 0; i < Length; i++)
+    {
+        if (offset >= CMD_BUFFER_SIZE - 4)
+            break;
         offset += snprintf(tx_buffer + offset, CMD_BUFFER_SIZE - offset, "%02X", Payload[i]);
     }
 
@@ -114,14 +118,14 @@ static int32_t WioE5_SendHexPayload(WioE5_Object_t *pObj, const uint8_t *Payload
 
     /* Fire the transmit command */
     pObj->IO.Write((const uint8_t *)tx_buffer, strlen(tx_buffer));
-    
+
     /* Wait for the RF pulse to finish */
-    pObj->IO.Delay(2000); 
+    pObj->IO.Delay(2000);
 
     /* Read the UART buffer to verify success */
     uint8_t rx_buffer[128] = {0};
     pObj->IO.Read(rx_buffer, sizeof(rx_buffer));
-    
+
     ESP_LOGW("SENDER_RADIO", "Radio Response: %s", rx_buffer);
 
     return WIO_OK;
