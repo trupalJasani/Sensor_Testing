@@ -19,7 +19,7 @@
    LoRa UART Configuration
    ================================ */
 #define UART_PORT_NUM UART_NUM_1
-#define UART_TX_PIN 4
+#define UART_TX_PIN 6
 #define UART_RX_PIN 5
 #define UART_BAUD_RATE 9600
 
