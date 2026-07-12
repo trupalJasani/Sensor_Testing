@@ -47,7 +47,7 @@ int32_t SHT31_Init(SHT31_Object_t *pObj) {
         if (pObj->IO.Write(pObj->i2c_address, reset_cmd, 2) != SHT31_OK) {
             return SHT31_ERROR;
         }
-        pObj->IO.Delay(20); // Let internal operational logic stabilize
+        pObj->IO.Delay(20); 
     }
 
     pObj->is_initialized = 1;
