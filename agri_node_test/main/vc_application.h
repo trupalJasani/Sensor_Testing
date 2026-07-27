@@ -8,10 +8,18 @@
 #ifndef VC_APPLICATION_H
 #define VC_APPLICATION_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief Initializes hardware and starts the main application FSM loop.
  * This function contains an infinite loop and will not return.
  */
 void vc_application_start(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* VC_APPLICATION_H */

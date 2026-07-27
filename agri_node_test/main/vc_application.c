@@ -28,7 +28,6 @@
 #define SLEEP_PERIOD_US  (900000000ULL)  /* 15 Minutes deep sleep (in microseconds) */
 #define WAKE_BUTTON_PIN  GPIO_NUM_4      /* Push button for manual maintenance wake */
 
-
 static const char *TAG = "AGRI_NODE_FSM";
 
 /* --- Finite State Machine Definitions --- */
@@ -52,6 +51,9 @@ static float current_hum = 0.0f;
 static float current_moisture = 0.0f;
 static float current_leaf = 0.0f;
 
+/* Maintenance Mode Flag */
+static bool maintenance_mode_active = false; 
+
 /* ==========================================================================
    RTC MEMORY, NVS BACKUP & 14-BYTE PAYLOAD STRUCT
    ========================================================================== */
@@ -64,7 +66,7 @@ RTC_DATA_ATTR int rtc_history_index = 0;
 /* The strictly packed 14-byte payload */
 typedef struct __attribute__((packed)) {
     uint8_t smith_risk;      /* 1 Byte: 0-100 Risk Score */
-    uint8_t cnn_risk;        /* 1 Byte: 0-100 Risk Score (Used for RF here) */
+    uint8_t cnn_risk;        /* 1 Byte: 0-100 Risk Score (trained Random Forest, see edge_ai.c) */
     float temperature;       /* 4 Bytes: Current Temp */
     float humidity;          /* 4 Bytes: Current Humidity */
     int16_t leaf_wetness;    /* 2 Bytes: Raw ADC Value */
@@ -200,10 +202,13 @@ void vc_application_start(void)
         case STATE_INIT:
             ESP_LOGI(TAG, ">>> STATE: INIT (Direct Sensor Power Mode)");
             
+            maintenance_mode_active = false; /* Reset flag on boot */
+            
             /* --- WAKE-UP REASON ANALYSIS --- */
             esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
             if (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO) {
-                ESP_LOGI(TAG, "Wakeup triggered by MANUAL BUTTON PRESS on GPIO4!");
+                ESP_LOGW(TAG, "Wakeup triggered by MANUAL BUTTON PRESS on GPIO4!");
+                maintenance_mode_active = true; /* Enable Infinite Awake Mode */
             } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
                 ESP_LOGI(TAG, "Wakeup triggered by 15-Minute RTC Timer.");
             } else {
@@ -247,8 +252,13 @@ void vc_application_start(void)
             rtc_leaf_history[rtc_history_index] = current_leaf;
             
             /* Run Edge Models (Passing all 3 arrays securely!) */
-            uint8_t smith_score = calculate_smith_period(rtc_temp_history, rtc_hum_history, rtc_leaf_history, rtc_history_index);
-            uint8_t ai_score    = run_random_forest_inference(rtc_temp_history, rtc_hum_history, rtc_leaf_history, rtc_history_index);
+            uint8_t smith_score      = calculate_smith_period(rtc_temp_history, rtc_hum_history, rtc_leaf_history, rtc_history_index);
+            uint8_t heuristic_score  = run_heuristic_ai_risk(rtc_temp_history, rtc_hum_history, rtc_leaf_history, rtc_history_index);
+            uint8_t ai_score         = run_trained_random_forest_inference(rtc_temp_history, rtc_hum_history, rtc_leaf_history, rtc_history_index);
+
+            /* Heuristic score is logged only, for thesis comparison against the trained model */
+            ESP_LOGI(TAG, "Model comparison - Smith: %d%% | Heuristic: %d%% | Trained RF: %d%%",
+                     smith_score, heuristic_score, ai_score);
 
             /* Advance Ring Buffer Index cyclically */
             rtc_history_index = (rtc_history_index + 1) % BUFFER_SIZE;
@@ -278,7 +288,43 @@ void vc_application_start(void)
             break;
 
         case STATE_IDLE:
-            ESP_LOGI(TAG, ">>> STATE: IDLE (Entering Deep Sleep)");
+            ESP_LOGI(TAG, ">>> STATE: IDLE (Preparing for Deep Sleep)");
+
+            /* --- INFINITE MAINTENANCE WINDOW (TOGGLE TO SLEEP) --- */
+            if (maintenance_mode_active) {
+                ESP_LOGW(TAG, "==================================================");
+                ESP_LOGW(TAG, "MAINTENANCE MODE ACTIVE");
+                ESP_LOGW(TAG, "The MCU will stay awake INDEFINITELY.");
+                ESP_LOGW(TAG, "Press the GPIO4 button AGAIN to enter Deep Sleep.");
+                ESP_LOGW(TAG, "==================================================");
+                
+                /* 1. Temporarily configure the button pin to read its state */
+                gpio_config_t btn_config = {
+                    .pin_bit_mask = (1ULL << WAKE_BUTTON_PIN),
+                    .mode = GPIO_MODE_INPUT,
+                    .pull_up_en = GPIO_PULLUP_ENABLE,
+                    .pull_down_en = GPIO_PULLDOWN_DISABLE,
+                    .intr_type = GPIO_INTR_DISABLE
+                };
+                gpio_config(&btn_config);
+
+                /* 2. Wait until the user releases their finger from the initial wake-up press (Active Low = 0) */
+                while (gpio_get_level(WAKE_BUTTON_PIN) == 0) {
+                    vTaskDelay(pdMS_TO_TICKS(50));
+                }
+                
+                /* 3. Small debounce to ensure the physical spring inside the button settles */
+                vTaskDelay(pdMS_TO_TICKS(100));
+
+                /* 4. Infinite Loop: Wait until the button is pressed again (Pulled to GND) */
+                while (gpio_get_level(WAKE_BUTTON_PIN) == 1) {
+                    /* You MUST yield to FreeRTOS inside a while loop, or the Watchdog Timer will crash the board */
+                    vTaskDelay(pdMS_TO_TICKS(100)); 
+                }
+                
+                ESP_LOGI(TAG, "Second button press detected! Exiting maintenance mode...");
+                vTaskDelay(pdMS_TO_TICKS(500)); /* Debounce the press-down before going to sleep */
+            }
 
             /* 1. Configure the RTC Timer for 15 minutes */
             esp_sleep_enable_timer_wakeup(SLEEP_PERIOD_US);
@@ -295,6 +341,7 @@ void vc_application_start(void)
             esp_deep_sleep_enable_gpio_wakeup((1ULL << WAKE_BUTTON_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
 
             /* 3. Execute Sleep Command */
+            ESP_LOGI(TAG, "Entering Deep Sleep Now...");
             esp_deep_sleep_start();
             break;
 
