@@ -1,0 +1,21 @@
+Model: smith (DPD-based, trained on real DWD data)
+Features: ['day1_min_temp', 'day1_high_hum_h', 'day2_min_temp', 'day2_high_hum_h']
+Train: 89956  Test: 22490
+
+Accuracy:      100.00%
+Cohen's Kappa: 1.0000 (almost perfect agreement, Landis & Koch 1977)
+
+              precision    recall  f1-score   support
+
+           0      1.000     1.000     1.000     19867
+          50      1.000     1.000     1.000      2030
+         100      1.000     1.000     1.000       593
+
+    accuracy                          1.000     22490
+   macro avg      1.000     1.000     1.000     22490
+weighted avg      1.000     1.000     1.000     22490
+
+Confusion matrix (rows=true, cols=predicted), classes [np.int64(0), np.int64(50), np.int64(100)]:
+[[19867     0     0]
+ [    0  2030     0]
+ [    0     0   593]]

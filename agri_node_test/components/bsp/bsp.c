@@ -36,10 +36,11 @@ static LeafSensor_t LeafObj;
 
 /* ================================
    I2C Configuration
-   ================================ */
+   ================================
+*/
 #define I2C_MASTER_NUM I2C_NUM_0
-#define I2C_MASTER_SDA_IO 8
-#define I2C_MASTER_SCL_IO 9
+#define I2C_MASTER_SDA_IO 21
+#define I2C_MASTER_SCL_IO 20
 #define I2C_MASTER_FREQ_HZ 100000
 
 static i2c_master_bus_handle_t bus_handle = NULL;
@@ -97,6 +98,12 @@ int32_t BSP_I2C_Init(void)
         .scl_io_num = I2C_MASTER_SCL_IO,
         .clk_source = I2C_CLK_SRC_DEFAULT,
         .glitch_ignore_cnt = 7,
+        /* Disabled: redundant with the SHT31 breakout's own pull-ups, and
+           counterproductive specifically on GPIO9 (boot strap pin) - see
+           note above. If I2C communication becomes unreliable after this
+           change, the breakout board's own pull-ups are too weak and
+           external pull-ups should be added on the PCB/wiring instead of
+           re-enabling this. */
         .flags.enable_internal_pullup = true,
     };
 

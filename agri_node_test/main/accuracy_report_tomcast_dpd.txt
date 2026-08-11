@@ -1,0 +1,25 @@
+Model: tomcast (DPD-based, trained on real DWD data)
+Features: ['mean_wet_temp', 'wet_hours_dpd']
+Train: 89956  Test: 22490
+
+Accuracy:      99.97%
+Cohen's Kappa: 0.9990 (almost perfect agreement, Landis & Koch 1977)
+
+              precision    recall  f1-score   support
+
+           0      1.000     1.000     1.000     18634
+          25      0.998     0.999     0.999      2784
+          50      0.997     0.996     0.997       759
+          75      1.000     1.000     1.000       309
+         100      1.000     1.000     1.000         4
+
+    accuracy                          1.000     22490
+   macro avg      0.999     0.999     0.999     22490
+weighted avg      1.000     1.000     1.000     22490
+
+Confusion matrix (rows=true, cols=predicted), classes [np.int64(0), np.int64(25), np.int64(50), np.int64(75), np.int64(100)]:
+[[18632     2     0     0     0]
+ [    0  2782     2     0     0]
+ [    0     3   756     0     0]
+ [    0     0     0   309     0]
+ [    0     0     0     0     4]]

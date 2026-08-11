@@ -20,7 +20,7 @@ import glob
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, cohen_kappa_score
 import emlearn
 
 DPD_THRESHOLD_C = 3.0   # "wet" when (air temp - dew point) <= this many degC
@@ -154,12 +154,53 @@ def train_eval_export(X, y, name, feature_names):
     clf.fit(X_tr, y_tr)
     y_pred = clf.predict(X_te)
     acc = accuracy_score(y_te, y_pred)
+    try:
+        kappa = cohen_kappa_score(y_te, y_pred)
+        if np.isnan(kappa):
+            raise ValueError("nan")
+    except (ValueError, FloatingPointError):
+        # Happens when the test split contains only one class (expected
+        # agreement is then undefined) - not expected on the full real
+        # dataset, but guarded here for small/filtered subsets.
+        kappa = float("nan")
+        print(f"[{name}] WARNING: Kappa undefined - test split contains only one class "
+              f"({sorted(np.unique(y_te))}). Accuracy alone is not meaningful here either.")
+
+    # Landis & Koch (1977) interpretation bands - standard reference scale
+    if np.isnan(kappa): interp = "undefined"
+    elif kappa > 0.80: interp = "almost perfect"
+    elif kappa > 0.60: interp = "substantial"
+    elif kappa > 0.40: interp = "moderate"
+    elif kappa > 0.20: interp = "fair"
+    else: interp = "slight/poor"
+
     print(f"\n[{name}] held-out accuracy: {acc*100:.2f}%")
+    print(f"[{name}] Cohen's Kappa:     {kappa:.4f}  ({interp} agreement, Landis & Koch 1977)")
     print(classification_report(y_te, y_pred, digits=3, zero_division=0))
+    print(f"[{name}] confusion matrix (rows=true, cols=predicted):")
+    labels_sorted = sorted(np.unique(y))
+    print(f"  classes: {labels_sorted}")
+    print(confusion_matrix(y_te, y_pred, labels=labels_sorted))
+
     cmodel = emlearn.convert(clf, method="inline")
     cmodel.save(file=f"rf_model_{name}_dpd.h", name=f"rf_{name}_dpd")
     print(f"Exported rf_model_{name}_dpd.h (features: {feature_names})")
-    return acc
 
-train_eval_export(X_smith, y_smith, "smith", ["day1_min_temp", "day1_high_hum_h", "day2_min_temp", "day2_high_hum_h"])
-train_eval_export(X_tomcast, y_tomcast, "tomcast", ["mean_wet_temp", "wet_hours_dpd"])
+    with open(f"accuracy_report_{name}_dpd.txt", "w") as f:
+        f.write(f"Model: {name} (DPD-based, trained on real DWD data)\n")
+        f.write(f"Features: {feature_names}\n")
+        f.write(f"Train: {len(X_tr)}  Test: {len(X_te)}\n\n")
+        f.write(f"Accuracy:      {acc*100:.2f}%\n")
+        f.write(f"Cohen's Kappa: {kappa:.4f} ({interp} agreement, Landis & Koch 1977)\n\n")
+        f.write(classification_report(y_te, y_pred, digits=3, zero_division=0))
+        f.write(f"\nConfusion matrix (rows=true, cols=predicted), classes {labels_sorted}:\n")
+        f.write(str(confusion_matrix(y_te, y_pred, labels=labels_sorted)))
+
+    return acc, kappa
+
+smith_acc, smith_kappa = train_eval_export(X_smith, y_smith, "smith", ["day1_min_temp", "day1_high_hum_h", "day2_min_temp", "day2_high_hum_h"])
+tomcast_acc, tomcast_kappa = train_eval_export(X_tomcast, y_tomcast, "tomcast", ["mean_wet_temp", "wet_hours_dpd"])
+
+print(f"\n=== Summary ===")
+print(f"Smith:   accuracy={smith_acc*100:.2f}%  kappa={smith_kappa:.4f}")
+print(f"TomCast: accuracy={tomcast_acc*100:.2f}%  kappa={tomcast_kappa:.4f}")
