@@ -17,11 +17,14 @@
 #include "wio_e5.h"
 #include "vc_application.h"
 #include "edge_ai.h"
+
 /* ==================== SYSTEM CONFIGURATION ==================== */
 #define SLEEP_PERIOD_US (900000000ULL)
 #define WAKE_BUTTON_PIN GPIO_NUM_4
 #define SENSOR_POWER_PIN GPIO_NUM_7
+
 static const char *TAG = "AGRI_NODE_FSM";
+
 typedef enum
 {
     STATE_INIT,
@@ -31,6 +34,7 @@ typedef enum
     STATE_IDLE,
     STATE_ERROR
 } NodeState_t;
+
 static SHT31_Object_t sht31_sensor;
 static WioE5_Object_t lora_radio;
 static float current_temp = 0.0f;
@@ -38,10 +42,12 @@ static float current_hum = 0.0f;
 static float current_moisture = 0.0f;
 static float current_leaf = 0.0f;
 static bool maintenance_mode_active = false;
+
 RTC_DATA_ATTR float rtc_temp_history[BUFFER_SIZE];
 RTC_DATA_ATTR float rtc_hum_history[BUFFER_SIZE];
 RTC_DATA_ATTR float rtc_leaf_history[BUFFER_SIZE];
 RTC_DATA_ATTR int rtc_history_index = 0;
+
 /* ==================== 14-BYTE LORA PAYLOAD ==================== */
 typedef struct __attribute__((packed))
 {
@@ -54,7 +60,9 @@ typedef struct __attribute__((packed))
     uint16_t reserved1;
     uint16_t reserved2;
 } LoRaPayload_t;
+
 static LoRaPayload_t tx_payload;
+
 static void Sensor_Power_Init(void)
 {
     gpio_config_t mosfet_conf =
@@ -69,18 +77,21 @@ static void Sensor_Power_Init(void)
     ESP_LOGI(TAG,
              "Sensor power initialized: MOSFET OFF");
 }
+
 static void Sensor_Power_On(void)
 {
     gpio_set_level(SENSOR_POWER_PIN, 0);
     ESP_LOGI(TAG,
              "MOSFET ON: Sensor power enabled.");
 }
+
 static void Sensor_Power_Off(void)
 {
     gpio_set_level(SENSOR_POWER_PIN, 1);
     ESP_LOGI(TAG,
              "MOSFET OFF: Sensor power disabled.");
 }
+
 static void save_history_to_nvs(void)
 {
     nvs_handle_t my_handle;
@@ -121,6 +132,7 @@ static void save_history_to_nvs(void)
             esp_err_to_name(err));
     }
 }
+
 static void load_history_from_nvs(void)
 {
     nvs_handle_t my_handle;
@@ -166,6 +178,7 @@ static void load_history_from_nvs(void)
             "Starting fresh buffers.");
     }
 }
+
 static esp_err_t LoRa_Init(void)
 {
     bsp_uart_init();
@@ -191,6 +204,7 @@ static esp_err_t LoRa_Init(void)
         "LoRa Wio-E5 initialized (P2P Mode)");
     return ESP_OK;
 }
+
 static esp_err_t Sensors_Init(void)
 {
     if (
@@ -224,6 +238,7 @@ static esp_err_t Sensors_Init(void)
         "All sensors initialized successfully.");
     return ESP_OK;
 }
+
 static void Read_SHT31(
     float *temperature,
     float *humidity)
@@ -249,6 +264,7 @@ static void Read_SHT31(
         *humidity = 0.0f;
     }
 }
+
 static void Read_Soil(float *moisture)
 {
     uint32_t raw_adc;
@@ -269,6 +285,7 @@ static void Read_Soil(float *moisture)
         *moisture = 0.0f;
     }
 }
+
 static void Read_Leaf(float *wetness)
 {
     if (BSP_LEAF_GetWetness(wetness) == 0)
@@ -286,6 +303,7 @@ static void Read_Leaf(float *wetness)
         *wetness = 0.0f;
     }
 }
+
 void vc_application_start(void)
 {
     BSP_Delay(2000);
