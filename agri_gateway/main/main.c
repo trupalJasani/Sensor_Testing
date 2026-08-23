@@ -14,8 +14,8 @@
 #include "esp_http_client.h"
 
 /* ==================== WIFI / CLOUD CONFIGURATION ==================== */
-#define WIFI_SSID "Trupal’s iPhone"
-#define WIFI_PASS "Trupal@123"
+#define WIFI_SSID "Flat_EG"
+#define WIFI_PASS "47224781896060787411"
 
 #define BLYNK_TEMPLATE_NAME "Agri Gateway"
 #define BLYNK_AUTH_TOKEN "L9hBfec12ocxjtNGqbAj--NpKTdc1Ae_"

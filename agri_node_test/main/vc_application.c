@@ -1,4 +1,13 @@
+/**
+ ******************************************************************************
+ * @file    vc_application.c
+ * @brief   state machine implementation for the Node 
+ ******************************************************************************
+ */
+
+
 /* ==================== INCLUDES ==================== */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -17,6 +26,7 @@
 #include "edge_ai.h"
 
 /* ==================== SYSTEM CONFIGURATION ==================== */
+
 #define SLEEP_PERIOD_US (900000000ULL)
 #define WAKE_BUTTON_PIN GPIO_NUM_4
 #define SENSOR_POWER_PIN GPIO_NUM_7
@@ -24,6 +34,7 @@
 static const char *TAG = "AGRI_NODE_FSM";
 
 /* ==================== STATE MACHINE ==================== */
+
 typedef enum
 {
     STATE_INIT,
@@ -35,6 +46,7 @@ typedef enum
 } NodeState_t;
 
 /* ==================== GLOBAL OBJECTS AND VARIABLES ==================== */
+
 static SHT31_Object_t sht31_sensor;
 static WioE5_Object_t lora_radio;
 
@@ -46,12 +58,14 @@ static float current_leaf = 0.0f;
 static bool maintenance_mode_active = false;
 
 /* ==================== RTC HISTORY ==================== */
+
 RTC_DATA_ATTR float rtc_temp_history[BUFFER_SIZE];
 RTC_DATA_ATTR float rtc_hum_history[BUFFER_SIZE];
 RTC_DATA_ATTR float rtc_leaf_history[BUFFER_SIZE];
 RTC_DATA_ATTR int rtc_history_index = 0;
 
 /* ==================== 14-BYTE LORA PAYLOAD ==================== */
+
 typedef struct __attribute__((packed))
 {
     uint8_t smith_risk;
@@ -573,7 +587,7 @@ void vc_application_start(void)
 
             Read_Leaf(
                 &current_leaf);
-                
+
             current_state =
                 STATE_PROCESS_DATA;
 
