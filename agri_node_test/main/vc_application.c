@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    vc_application.c
- * @brief   state machine implementation for the Node 
+ * @brief   state machine implementation for the Node
  ******************************************************************************
  */
 
@@ -31,6 +31,27 @@
 #define WAKE_BUTTON_PIN GPIO_NUM_4
 #define SENSOR_POWER_PIN GPIO_NUM_7
 
+/* --- Status LED ---
+ * GPIO10 per DFRobot's own wiki/datasheet for the Beetle ESP32-C3, and
+ * consistent across the DFRobot community + ESPHome examples. HOWEVER:
+ * at least one real-world report exists of a board from this same
+ * product line shipping with the LED on GPIO8 instead of the documented
+ * GPIO10 (batch/clone variance). VERIFY on your actual unit with a
+ * simple blink test before relying on this in the field:
+ *     gpio_set_direction(GPIO_NUM_10, GPIO_MODE_OUTPUT);
+ *     gpio_set_level(GPIO_NUM_10, 0);   // try 0 and 1, see which lights it
+ * These boards' onboard LEDs are commonly wired active-low (driving the
+ * pin LOW turns the LED ON) - LED_ACTIVE_LOW below assumes this; flip it
+ * if your test shows the opposite. */
+#define STATUS_LED_PIN GPIO_NUM_10
+#define LED_ACTIVE_LOW 1
+
+#define LED_WAIT_ON_MS   150   /* "waiting for start button" blink pattern */
+#define LED_WAIT_OFF_MS  850
+#define LED_CONFIRM_BLINKS 4
+#define LED_CONFIRM_ON_MS  100
+#define LED_CONFIRM_OFF_MS 100
+
 static const char *TAG = "AGRI_NODE_FSM";
 
 /* ==================== STATE MACHINE ==================== */
@@ -38,6 +59,7 @@ static const char *TAG = "AGRI_NODE_FSM";
 typedef enum
 {
     STATE_INIT,
+    STATE_WAIT_FOR_START,   /* NEW: gated on a genuine hard power cycle only */
     STATE_READ_SENSORS,
     STATE_PROCESS_DATA,
     STATE_TRANSMIT,
@@ -80,6 +102,45 @@ typedef struct __attribute__((packed))
 
 static LoRaPayload_t tx_payload;
 
+/* ==================== STATUS LED ==================== */
+
+static inline void LED_Write(bool on)
+{
+    /* on==true means "LED lit", regardless of active-low/high wiring */
+    int level = LED_ACTIVE_LOW ? (on ? 0 : 1) : (on ? 1 : 0);
+    gpio_set_level(STATUS_LED_PIN, level);
+}
+
+static void LED_Init(void)
+{
+    gpio_config_t led_conf = {
+        .pin_bit_mask = (1ULL << STATUS_LED_PIN),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
+    gpio_config(&led_conf);
+    LED_Write(false);
+}
+
+/**
+ * @brief Blinks the status LED N times with the given on/off timing.
+ *        Used for the "start confirmed" indication - a fixed, short,
+ *        blocking sequence, consistent with this codebase's existing
+ *        blocking-poll style elsewhere (e.g. the maintenance-mode
+ *        button debounce loops).
+ */
+static void LED_Blink_N(int count, int on_ms, int off_ms)
+{
+    for (int i = 0; i < count; i++) {
+        LED_Write(true);
+        vTaskDelay(pdMS_TO_TICKS(on_ms));
+        LED_Write(false);
+        vTaskDelay(pdMS_TO_TICKS(off_ms));
+    }
+}
+
 /**
  * @brief Initializes the GPIO used to control sensor power.
  *
@@ -108,12 +169,6 @@ static void Sensor_Power_Init(void)
 
 /**
  * @brief Turns ON the power supply for the sensors.
- *
- * Drives the MOSFET control GPIO to the level required to enable
- * power to the connected sensors.
- *
- * @param None
- * @return None
  */
 static void Sensor_Power_On(void)
 {
@@ -123,12 +178,6 @@ static void Sensor_Power_On(void)
 
 /**
  * @brief Turns OFF the power supply for the sensors.
- *
- * Disables the MOSFET supplying power to the sensors to reduce
- * power consumption before the ESP32-C3 enters deep sleep.
- *
- * @param None
- * @return None
  */
 static void Sensor_Power_Off(void)
 {
@@ -138,13 +187,6 @@ static void Sensor_Power_Off(void)
 
 /**
  * @brief Saves sensor history and the current history index to NVS.
- *
- * Stores temperature, humidity, and leaf wetness history arrays in
- * non-volatile storage. The history index is also saved so that the
- * system can recover its previous history after a hard power cycle.
- *
- * @param None
- * @return None
  */
 static void save_history_to_nvs(void)
 {
@@ -196,14 +238,6 @@ static void save_history_to_nvs(void)
 
 /**
  * @brief Loads previously stored sensor history from NVS.
- *
- * Recovers the temperature, humidity, and leaf wetness history arrays
- * together with the current history index. This allows the Edge AI
- * algorithms to continue using historical data after a hard reset or
- * normal power cycle.
- *
- * @param None
- * @return None
  */
 static void load_history_from_nvs(void)
 {
@@ -264,14 +298,6 @@ static void load_history_from_nvs(void)
 
 /**
  * @brief Initializes and configures the Wio-E5 LoRa module.
- *
- * Initializes the UART interface, registers the BSP UART functions
- * with the Wio-E5 driver, initializes the LoRa module, and configures
- * it for point-to-point communication mode.
- *
- * @param None
- * @return ESP_OK if initialization is successful.
- * @return ESP_FAIL if driver registration fails.
  */
 static esp_err_t LoRa_Init(void)
 {
@@ -307,14 +333,6 @@ static esp_err_t LoRa_Init(void)
 
 /**
  * @brief Initializes all sensors connected to the agricultural node.
- *
- * Registers and initializes the SHT31 temperature and humidity sensor,
- * initializes the soil moisture ADC interface, and initializes the
- * leaf wetness sensor interface.
- *
- * @param None
- * @return ESP_OK if all sensors initialize successfully.
- * @return ESP_FAIL if any sensor initialization fails.
  */
 static esp_err_t Sensors_Init(void)
 {
@@ -358,16 +376,30 @@ static esp_err_t Sensors_Init(void)
 }
 
 /**
- * @brief Reads temperature and humidity from the SHT31 sensor.
+ * @brief Powers the sensor rail, waits for stabilization, and
+ *        initializes sensors + LoRa. Shared by both the normal
+ *        (timer/button wake) path and the post-confirmation path out
+ *        of STATE_WAIT_FOR_START, so this logic exists exactly once.
  *
- * Requests a measurement from the SHT31 driver and stores the resulting
- * temperature and relative humidity values in the supplied variables.
- * If the read operation fails, both output values are set to 0.0.
- *
- * @param temperature Pointer used to store temperature in degrees Celsius.
- * @param humidity Pointer used to store relative humidity in percent.
- * @return None
+ * @return ESP_OK if both sensors and LoRa initialized successfully.
  */
+static esp_err_t Power_On_And_Init_Node(void)
+{
+    Sensor_Power_Init();
+    Sensor_Power_On();
+
+    ESP_LOGI(TAG, "Waiting for sensor power stabilization...");
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    if (Sensors_Init() != ESP_OK) {
+        return ESP_FAIL;
+    }
+    if (LoRa_Init() != ESP_OK) {
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
 static void Read_SHT31(
     float *temperature,
     float *humidity)
@@ -395,16 +427,6 @@ static void Read_SHT31(
     }
 }
 
-/**
- * @brief Reads the soil moisture sensor.
- *
- * Reads the raw ADC value and obtains the corresponding soil moisture
- * value through the soil moisture driver. If the read operation fails,
- * the moisture output is set to 0.0.
- *
- * @param moisture Pointer used to store the soil moisture value.
- * @return None
- */
 static void Read_Soil(float *moisture)
 {
     uint32_t raw_adc;
@@ -428,15 +450,6 @@ static void Read_Soil(float *moisture)
     }
 }
 
-/**
- * @brief Reads the leaf wetness sensor value.
- *
- * Obtains the current leaf wetness value from the leaf sensor driver.
- * If the sensor read fails, the output value is set to 0.0.
- *
- * @param wetness Pointer used to store the leaf wetness value.
- * @return None
- */
 static void Read_Leaf(float *wetness)
 {
     if (BSP_LEAF_GetWetness(wetness) == 0)
@@ -458,21 +471,6 @@ static void Read_Leaf(float *wetness)
 
 /**
  * @brief Runs the complete agricultural sensor node state machine.
- *
- * Controls the complete operating cycle of the node:
- * - Determines the wake-up reason.
- * - Recovers historical data when required.
- * - Powers and initializes the sensors.
- * - Initializes the LoRa module.
- * - Reads sensor values.
- * - Runs the Edge AI and disease-risk algorithms.
- * - Stores historical data.
- * - Creates and transmits the 14-byte LoRa payload.
- * - Handles maintenance mode.
- * - Powers down sensors and enters deep sleep.
- *
- * @param None
- * @return None
  */
 void vc_application_start(void)
 {
@@ -491,6 +489,7 @@ void vc_application_start(void)
                 ">>> STATE: INIT");
 
             maintenance_mode_active = false;
+            LED_Init();
 
             esp_sleep_wakeup_cause_t wakeup_reason =
                 esp_sleep_get_wakeup_cause();
@@ -546,29 +545,83 @@ void vc_application_start(void)
                 load_history_from_nvs();
             }
 
-            Sensor_Power_Init();
-            Sensor_Power_On();
-
-            ESP_LOGI(
-                TAG,
-                "Waiting for sensor power stabilization...");
-
-            vTaskDelay(
-                pdMS_TO_TICKS(2000));
-
-            if (Sensors_Init() != ESP_OK)
+            /* --- PRODUCTION DEPLOYMENT GATE ---
+             * Only a genuine hard power cycle (fresh battery connection -
+             * first field deployment, or a battery swap) requires the
+             * operator to explicitly confirm start. A timer wake or a
+             * maintenance button wake means the node is already deployed
+             * and running its normal duty cycle - gating those too would
+             * break autonomous operation, not just first-install safety. */
+            if (
+                wakeup_reason !=
+                    ESP_SLEEP_WAKEUP_TIMER &&
+                wakeup_reason !=
+                    ESP_SLEEP_WAKEUP_GPIO)
             {
-                current_state = STATE_ERROR;
-                break;
+                current_state = STATE_WAIT_FOR_START;
+            }
+            else
+            {
+                if (Power_On_And_Init_Node() != ESP_OK) {
+                    current_state = STATE_ERROR;
+                } else {
+                    current_state = STATE_READ_SENSORS;
+                }
+            }
+            break;
+        }
+
+        case STATE_WAIT_FOR_START:
+        {
+            ESP_LOGI(TAG, ">>> STATE: WAIT FOR START");
+            ESP_LOGW(TAG, "==================================================");
+            ESP_LOGW(TAG, "NODE ARMED - PRESS BUTTON (GPIO4) TO BEGIN OPERATION");
+            ESP_LOGW(TAG, "Blue LED blinking = waiting for operator confirmation.");
+            ESP_LOGW(TAG, "==================================================");
+
+            gpio_config_t btn_wait_config = {
+                .pin_bit_mask = (1ULL << WAKE_BUTTON_PIN),
+                .mode = GPIO_MODE_INPUT,
+                .pull_up_en = GPIO_PULLUP_ENABLE,
+                .pull_down_en = GPIO_PULLDOWN_DISABLE,
+                .intr_type = GPIO_INTR_DISABLE
+            };
+            gpio_config(&btn_wait_config);
+
+            /* Blink LED while polling the button (active low = pressed).
+             * No timeout by default - the node will not begin operating
+             * until an operator deliberately confirms it, per the
+             * requirement that this is a mandatory, not optional, step.
+             * If an unattended fallback is ever wanted instead (e.g.
+             * proceed automatically after N minutes so a stuck/missing
+             * button doesn't brick a deployed unit), that is a real
+             * design trade-off worth deciding deliberately, not a
+             * default to add silently here. */
+            while (gpio_get_level(WAKE_BUTTON_PIN) == 1) {
+                LED_Write(true);
+                vTaskDelay(pdMS_TO_TICKS(LED_WAIT_ON_MS));
+                LED_Write(false);
+                vTaskDelay(pdMS_TO_TICKS(LED_WAIT_OFF_MS));
             }
 
-            if (LoRa_Init() != ESP_OK)
-            {
-                current_state = STATE_ERROR;
-                break;
+            /* Debounce the press, then wait for release before continuing
+             * (consistent with the debounce pattern already used for the
+             * maintenance-mode button elsewhere in this file). */
+            vTaskDelay(pdMS_TO_TICKS(50));
+            while (gpio_get_level(WAKE_BUTTON_PIN) == 0) {
+                vTaskDelay(pdMS_TO_TICKS(50));
             }
+            vTaskDelay(pdMS_TO_TICKS(100));
 
-            current_state = STATE_READ_SENSORS;
+            ESP_LOGI(TAG, "Start confirmed by operator. Beginning operation.");
+            LED_Blink_N(LED_CONFIRM_BLINKS, LED_CONFIRM_ON_MS, LED_CONFIRM_OFF_MS);
+            LED_Write(false);
+
+            if (Power_On_And_Init_Node() != ESP_OK) {
+                current_state = STATE_ERROR;
+            } else {
+                current_state = STATE_READ_SENSORS;
+            }
             break;
         }
 
@@ -758,6 +811,7 @@ void vc_application_start(void)
             }
 
             Sensor_Power_Off();
+            LED_Write(false);
 
             vTaskDelay(
                 pdMS_TO_TICKS(50));
@@ -806,6 +860,7 @@ void vc_application_start(void)
                 "Critical Hardware Failure!");
 
             Sensor_Power_Off();
+            LED_Write(false);
 
             ESP_LOGE(
                 TAG,
