@@ -165,7 +165,7 @@ static int32_t BSP_ADC_Init(void)
         return -1;
 
     adc_oneshot_chan_cfg_t config = {
-        .bitwidth = ADC_BITWIDTH_DEFAULT,
+        .bitwidth = ADC_BITWIDTH_12,
         .atten = ADC_ATTEN_DB_12,
     };
 
