@@ -4,7 +4,7 @@
 
 static const char *TAG = "LEAF_SENSOR";
 
-/* Davis calibration measured during the ESP32-S3 test. */
+/* Davis calibration measured during the ESP32-C3 test. */
 #define DAVIS_ADC_DRY 4095.0f
 #define DAVIS_ADC_WET 3416.0f
 
