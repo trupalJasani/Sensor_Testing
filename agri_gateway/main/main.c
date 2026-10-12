@@ -17,10 +17,8 @@
 // // #define WIFI_SSID "Trupal’s iPhone"
 // // #define WIFI_PASS "Trupal@123"
 
-
 // // #define WIFI_SSID "Flat_EG"
 // // #define WIFI_PASS "47224781896060787411"
-
 
 // #define WIFI_SSID "FRITZ!Box 5530 OM"
 // #define WIFI_PASS "65521683568401574615"
@@ -336,8 +334,6 @@
 //     }
 // }
 
-
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -360,14 +356,18 @@
 /* ==================== WIFI / CLOUD CONFIGURATION ==================== */
 /* Fill in your local credentials; do not commit real secrets to source control. */
 #define WIFI_SSID "FRITZ!Box 5530 OM"
- #define WIFI_PASS "65521683568401574615"
+#define WIFI_PASS "65521683568401574615"
 
 #define BLYNK_TEMPLATE_NAME "Agri Gateway"
-#define BLYNK_AUTH_TOKEN "YOUR_BLYNK_AUTH_TOKEN"
+#define BLYNK_AUTH_TOKEN "L9hBfec12ocxjtNGqbAj--NpKTdc1Ae_"
+
 #define LEAF_WETNESS_HIGH_THRESHOLD 10.0f
+
 static const char *TAG = "AGRI_GATEWAY";
 static WioE5_Object_t lora_radio;
+
 #define WIFI_CONNECTED_BIT BIT0
+
 static EventGroupHandle_t wifi_event_group = NULL;
 
 /* ==================== 14-BYTE LORA PAYLOAD ==================== */
@@ -383,6 +383,7 @@ typedef struct __attribute__((packed))
     uint16_t reserved1;
     uint16_t reserved2;
 } LoRaPayload_t;
+
 #define LORA_PAYLOAD_SIZE sizeof(LoRaPayload_t)
 
 /* ==================== META CLASSIFIER ==================== */
@@ -433,7 +434,8 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
              event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
         ESP_LOGW("WIFI", "Disconnected. Reconnecting...");
-        if (wifi_event_group != NULL) {
+        if (wifi_event_group != NULL)
+        {
             xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
         }
         esp_wifi_connect();
@@ -442,7 +444,8 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
              event_id == IP_EVENT_STA_GOT_IP)
     {
         ESP_LOGI("WIFI", "WIFI CONNECTED! CLOUD BRIDGE ACTIVE.");
-        if (wifi_event_group != NULL) {
+        if (wifi_event_group != NULL)
+        {
             xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
         }
     }
@@ -461,13 +464,15 @@ static void Time_Init(void)
     tzset();
     esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
     esp_err_t err = esp_netif_sntp_init(&config);
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGW("TIME", "Could not initialize SNTP: %s", esp_err_to_name(err));
         return;
     }
     ESP_LOGI("TIME", "Waiting up to 15 seconds for NTP synchronization...");
     err = esp_netif_sntp_sync_wait(pdMS_TO_TICKS(15000));
-    if (err == ESP_OK) {
+    if (err == ESP_OK)
+    {
         time_t now;
         struct tm timeinfo;
         char timestamp[32];
@@ -475,7 +480,9 @@ static void Time_Init(void)
         localtime_r(&now, &timeinfo);
         strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &timeinfo);
         ESP_LOGI("TIME", "NTP synchronized. Local time: %s", timestamp);
-    } else {
+    }
+    else
+    {
         ESP_LOGW("TIME", "NTP synchronization failed/timed out: %s", esp_err_to_name(err));
     }
 }
@@ -483,7 +490,8 @@ static void Time_Init(void)
 static void Wifi_Init(void)
 {
     wifi_event_group = xEventGroupCreate();
-    if (wifi_event_group == NULL) {
+    if (wifi_event_group == NULL)
+    {
         ESP_LOGE("WIFI", "Failed to create Wi-Fi event group.");
         abort();
     }
@@ -596,9 +604,12 @@ static void ParseAndPrintPayload(const char *raw_packet)
     char timestamp[32];
     time(&now);
     localtime_r(&now, &timeinfo);
-    if (timeinfo.tm_year >= (2024 - 1900)) {
+    if (timeinfo.tm_year >= (2024 - 1900))
+    {
         strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &timeinfo);
-    } else {
+    }
+    else
+    {
         snprintf(timestamp, sizeof(timestamp), "TIME_NOT_SYNCED");
     }
     ESP_LOGW("LORA_RX", "Received at:   %s", timestamp);
@@ -654,9 +665,12 @@ void app_main(void)
         pdFALSE,
         pdTRUE,
         pdMS_TO_TICKS(20000));
-    if ((wifi_bits & WIFI_CONNECTED_BIT) != 0) {
+    if ((wifi_bits & WIFI_CONNECTED_BIT) != 0)
+    {
         Time_Init();
-    } else {
+    }
+    else
+    {
         ESP_LOGW("TIME", "Wi-Fi/IP unavailable; timestamp may be TIME_NOT_SYNCED.");
     }
     if (Gateway_Init() != ESP_OK)

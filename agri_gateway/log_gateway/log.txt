@@ -1,0 +1,529 @@
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0x15a0
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xd20
+load:0x403cb700,len:0x2f00
+entry 0x403c8928
+I (27) boot: ESP-IDF v5.4.1-dirty 2nd stage bootloader
+I (27) boot: compile time Jun 16 2026 11:14:31
+I (27) boot: Multicore bootloader
+I (28) boot: chip revision: v0.2
+I (30) boot: efuse block revision: v1.3
+I (34) boot.esp32s3: Boot SPI Speed : 80MHz
+I (38) boot.esp32s3: SPI Mode       : DIO
+I (42) boot.esp32s3: SPI Flash Size : 2MB
+I (45) boot: Enabling RNG early entropy source...
+I (50) boot: Partition Table:
+I (52) boot: ## Label            Usage          Type ST Offset   Length
+I (59) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (65) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (72) boot:  2 factory          factory app      00 00 00010000 00100000
+I (78) boot: End of partition table
+I (82) esp_image: segment 0: paddr=00010020 vaddr=3c0b0020 size=20294h (131732) map
+I (112) esp_image: segment 1: paddr=000302bc vaddr=3fc9ab00 size=04a74h ( 19060) load
+I (116) esp_image: segment 2: paddr=00034d38 vaddr=40374000 size=0b2e0h ( 45792) load
+I (127) esp_image: segment 3: paddr=00040020 vaddr=42000020 size=a4050h (671824) map
+I (245) esp_image: segment 4: paddr=000e4078 vaddr=4037f2e0 size=0b734h ( 46900) load
+I (256) esp_image: segment 5: paddr=000ef7b4 vaddr=600fe100 size=0001ch (    28) load
+I (265) boot: Loaded app from partition at offset 0x10000
+I (265) boot: Disabling RNG early entropy source...
+I (275) cpu_start: Multicore app
+I (284) cpu_start: Pro cpu start user code
+I (284) cpu_start: cpu freq: 160000000 Hz
+I (284) app_init: Application information:
+I (284) app_init: Project name:     agri_gateway
+I (289) app_init: App version:      1095be8-dirty
+I (293) app_init: Compile time:     Sep 21 2026 13:47:37
+I (298) app_init: ELF file SHA256:  fa71b5fee...
+I (303) app_init: ESP-IDF:          v5.4.1-dirty
+I (307) efuse_init: Min chip rev:     v0.0
+I (311) efuse_init: Max chip rev:     v0.99 
+I (315) efuse_init: Chip rev:         v0.2
+I (319) heap_init: Initializing. RAM available for dynamic allocation:
+I (325) heap_init: At 3FCA38D8 len 00045E38 (279 KiB): RAM
+I (330) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+I (335) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+I (340) heap_init: At 600FE11C len 00001ECC (7 KiB): RTCRAM
+I (347) spi_flash: detected chip: generic
+I (349) spi_flash: flash io: dio
+W (352) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.
+I (365) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (371) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (378) main_task: Started on CPU0
+I (398) main_task: Calling app_main()
+I (2398) AGRI_GATEWAY: Starting Agriculture Gateway (ESP32-S3)...
+I (2408) pp: pp rom version: e7ae62f
+I (2408) net80211: net80211 rom version: e7ae62f
+I (2428) wifi:wifi driver task: 3fcadad8, prio:23, stack:6656, core=0
+I (2438) wifi:wifi firmware version: 79fa3f41ba
+I (2438) wifi:wifi certification version: v7.0
+I (2438) wifi:config NVS flash: enabled
+I (2438) wifi:config nano formatting: disabled
+I (2438) wifi:Init data frame dynamic rx buffer num: 32
+I (2448) wifi:Init static rx mgmt buffer num: 5
+I (2448) wifi:Init management short buffer num: 32
+I (2458) wifi:Init dynamic tx buffer num: 32
+I (2458) wifi:Init static tx FG buffer num: 2
+I (2458) wifi:Init static rx buffer size: 1600
+I (2468) wifi:Init static rx buffer num: 10
+I (2468) wifi:Init dynamic rx buffer num: 32
+I (2478) wifi_init: rx ba win: 6
+I (2478) wifi_init: accept mbox: 6
+I (2478) wifi_init: tcpip mbox: 32
+I (2478) wifi_init: udp mbox: 6
+I (2488) wifi_init: tcp mbox: 6
+I (2488) wifi_init: tcp tx win: 5760
+I (2488) wifi_init: tcp rx win: 5760
+I (2498) wifi_init: tcp mss: 1440
+I (2498) wifi_init: WiFi IRAM OP enabled
+I (2498) wifi_init: WiFi RX IRAM OP enabled
+I (2508) phy_init: phy_version 700,8582a7fd,Feb 10 2025,20:13:11
+I (2548) wifi:mode : sta (cc:8d:a2:ec:b5:48)
+I (2548) wifi:enable tsf
+I (2558) wifi:new:<7,1>, old:<1,0>, ap:<255,255>, sta:<7,1>, prof:1, snd_ch_cfg:0x0
+I (2558) wifi:state: init -> auth (0xb0)
+I (2638) wifi:state: auth -> assoc (0x0)
+I (2638) wifi:state: assoc -> run (0x10)
+I (2658) wifi:connected with FRITZ!Box 5530 OM, aid = 129, channel 7, 40U, bssid = 08:b6:57:d0:59:d8
+I (2668) wifi:security: WPA2-PSK, phy: bgn, rssi: -67
+I (2668) wifi:pm start, type: 1
+
+I (2668) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (2678) wifi:set rx beacon pti, rx_bcn_pti: 0, bcn_timeout: 25000, mt_pti: 0, mt_time: 10000
+I (2698) wifi:<ba-add>idx:0 (ifx:0, 08:b6:57:d0:59:d8), tid:0, ssn:0, winSize:64
+I (2698) wifi:<ba-add>idx:1 (ifx:0, 08:b6:57:d0:59:d8), tid:1, ssn:0, winSize:64
+I (2798) wifi:dp: 2, bi: 102400, li: 4, scale listen interval from 307200 us to 409600 us
+I (2798) wifi:AP's beacon interval = 102400 us, DTIM period = 2
+I (3198) wifi:<ba-del>idx:1, tid:1
+I (3198) wifi:<ba-add>idx:1 (ifx:0, 08:b6:57:d0:59:d8), tid:1, ssn:0, winSize:64
+I (4248) esp_netif_handlers: sta ip: 192.168.178.192, mask: 255.255.255.0, gw: 192.168.178.1
+I (4248) WIFI: WIFI CONNECTED! CLOUD BRIDGE ACTIVE.
+I (4248) TIME: Waiting up to 15 seconds for NTP synchronization...
+W (19248) TIME: NTP synchronization failed/timed out: ESP_ERR_TIMEOUT
+I (19848) AGRI_GATEWAY: Gateway Radio Ping SUCCESS!
+I (20878) RAW_UART: +MODE: TEST
++TEST: RFCFG F:868100000, SF10, BW125K, TXPR:12, RXPR:15, POW:14dBm, CRC:ON, IQ:OFF, NET:OFF
++TEST: RXLRPKT
+
+I (35308) RAW_UART: +TEST: LEN:14, RSSI:-36, SNR:8
++TEST: RX "0000040952170000A71500000000"
+
+W (35308) LORA_RX: =======================================
+W (35308) LORA_RX: Received at:   2026-10-11 19:25:03
+W (35308) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (35318) LORA_RX:   Smith risk:    0%
+W (35318) LORA_RX:   RF risk:       0%
+W (35318) LORA_RX:   Temperature:   23.08 C
+W (35328) LORA_RX:   Humidity:      59.70 %RH
+W (35328) LORA_RX:   Leaf Wetness:  0.00 
+W (35338) LORA_RX:   Soil Moisture: 55.43%
+W (35338) LORA_RX: =======================================
+I (35338) META_AI: Running Fog Ensemble Validation...
+I (35348) META_AI: Nominal conditions. Averaging model scores.
+W (35348) META_AI: Final validated risk: 0%
+I (35448) CLOUD: Data pushed to Blynk.
+I (36068) RAW_UART: +TEST: RXLRPKT
+
+I (945298) RAW_UART: +TEST: LEN:14, RSSI:-31, SNR:8
++TEST: RX "0000F50849160000A71500000000"
+
+W (945298) LORA_RX: =======================================
+W (945298) LORA_RX: Received at:   2026-10-11 19:40:13
+W (945298) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (945308) LORA_RX:   Smith risk:    0%
+W (945308) LORA_RX:   RF risk:       0%
+W (945308) LORA_RX:   Temperature:   22.93 C
+W (945318) LORA_RX:   Humidity:      57.05 %RH
+W (945318) LORA_RX:   Leaf Wetness:  0.00 
+W (945328) LORA_RX:   Soil Moisture: 55.43%
+W (945328) LORA_RX: =======================================
+I (945338) META_AI: Running Fog Ensemble Validation...
+I (945338) META_AI: Nominal conditions. Averaging model scores.
+W (945348) META_AI: Final validated risk: 0%
+I (945438) CLOUD: Data pushed to Blynk.
+I (946048) RAW_UART: +TEST: RXLRPKT
+
+I (1849718) RAW_UART: +TEST: LEN:14, RSSI:-29, SNR:8
++TEST: RX "0000EE08F4150000B41500000000"
+
+W (1849718) LORA_RX: =======================================
+W (1849718) LORA_RX: Received at:   2026-10-11 19:55:17
+W (1849718) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (1849728) LORA_RX:   Smith risk:    0%
+W (1849728) LORA_RX:   RF risk:       0%
+W (1849728) LORA_RX:   Temperature:   22.86 C
+W (1849738) LORA_RX:   Humidity:      56.20 %RH
+W (1849738) LORA_RX:   Leaf Wetness:  0.00 
+W (1849748) LORA_RX:   Soil Moisture: 55.56%
+W (1849748) LORA_RX: =======================================
+I (1849758) META_AI: Running Fog Ensemble Validation...
+I (1849758) META_AI: Nominal conditions. Averaging model scores.
+W (1849768) META_AI: Final validated risk: 0%
+I (1849858) CLOUD: Data pushed to Blynk.
+I (1850468) RAW_UART: +TEST: RXLRPKT
+
+I (2755538) RAW_UART: +TEST: LEN:14, RSSI:-29, SNR:9
++TEST: RX "0000EB08EC150000AE1500000000"
+
+W (2755538) LORA_RX: =======================================
+W (2755538) LORA_RX: Received at:   2026-10-11 20:10:23
+W (2755538) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (2755548) LORA_RX:   Smith risk:    0%
+W (2755548) LORA_RX:   RF risk:       0%
+W (2755548) LORA_RX:   Temperature:   22.83 C
+W (2755558) LORA_RX:   Humidity:      56.12 %RH
+W (2755558) LORA_RX:   Leaf Wetness:  0.00 
+W (2755568) LORA_RX:   Soil Moisture: 55.50%
+W (2755568) LORA_RX: =======================================
+I (2755578) META_AI: Running Fog Ensemble Validation...
+I (2755578) META_AI: Nominal conditions. Averaging model scores.
+W (2755588) META_AI: Final validated risk: 0%
+I (2755698) CLOUD: Data pushed to Blynk.
+I (2756308) RAW_UART: +TEST: RXLRPKT
+
+I (3662088) RAW_UART: +TEST: LEN:14, RSSI:-24, SNR:8
++TEST: RX "0000EC0838160000AE1500000000"
+
+W (3662088) LORA_RX: =======================================
+W (3662088) LORA_RX: Received at:   2026-10-11 20:25:30
+W (3662088) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (3662098) LORA_RX:   Smith risk:    0%
+W (3662098) LORA_RX:   RF risk:       0%
+W (3662098) LORA_RX:   Temperature:   22.84 C
+W (3662108) LORA_RX:   Humidity:      56.88 %RH
+W (3662108) LORA_RX:   Leaf Wetness:  0.00 
+W (3662118) LORA_RX:   Soil Moisture: 55.50%
+W (3662118) LORA_RX: =======================================
+I (3662128) META_AI: Running Fog Ensemble Validation...
+I (3662128) META_AI: Nominal conditions. Averaging model scores.
+W (3662138) META_AI: Final validated risk: 0%
+I (3662218) CLOUD: Data pushed to Blynk.
+I (3662828) RAW_UART: +TEST: RXLRPKT
+
+I (4566408) RAW_UART: +TEST: LEN:14, RSSI:-23, SNR:9
++TEST: RX "0000010981160000A71500000000"
+
+W (4566408) LORA_RX: =======================================
+W (4566408) LORA_RX: Received at:   2026-10-11 20:40:34
+W (4566408) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (4566418) LORA_RX:   Smith risk:    0%
+W (4566418) LORA_RX:   RF risk:       0%
+W (4566428) LORA_RX:   Temperature:   23.05 C
+W (4566428) LORA_RX:   Humidity:      57.61 %RH
+W (4566428) LORA_RX:   Leaf Wetness:  0.00 
+W (4566438) LORA_RX:   Soil Moisture: 55.43%
+W (4566438) LORA_RX: =======================================
+I (4566448) META_AI: Running Fog Ensemble Validation...
+I (4566448) META_AI: Nominal conditions. Averaging model scores.
+W (4566458) META_AI: Final validated risk: 0%
+I (4566528) CLOUD: Data pushed to Blynk.
+I (4567148) RAW_UART: +TEST: RXLRPKT
+
+I (5472668) RAW_UART: +TEST: LEN:14, RSSI:-23, SNR:9
++TEST: RX "0000FA0852160000E01500000000"
+
+W (5472668) LORA_RX: =======================================
+W (5472668) LORA_RX: Received at:   2026-10-11 20:55:40
+W (5472668) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (5472678) LORA_RX:   Smith risk:    0%
+W (5472678) LORA_RX:   RF risk:       0%
+W (5472678) LORA_RX:   Temperature:   22.98 C
+W (5472688) LORA_RX:   Humidity:      57.14 %RH
+W (5472688) LORA_RX:   Leaf Wetness:  0.00 
+W (5472698) LORA_RX:   Soil Moisture: 56.00%
+W (5472698) LORA_RX: =======================================
+I (5472708) META_AI: Running Fog Ensemble Validation...
+I (5472708) META_AI: Nominal conditions. Averaging model scores.
+W (5472718) META_AI: Final validated risk: 0%
+I (5472828) CLOUD: Data pushed to Blynk.
+I (5473438) RAW_UART: +TEST: RXLRPKT
+
+I (6377158) RAW_UART: +TEST: LEN:14, RSSI:-26, SNR:8
++TEST: RX "0000FE0893160000AE1500000000"
+
+W (6377158) LORA_RX: =======================================
+W (6377158) LORA_RX: Received at:   2026-10-11 21:10:45
+W (6377158) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (6377168) LORA_RX:   Smith risk:    0%
+W (6377168) LORA_RX:   RF risk:       0%
+W (6377168) LORA_RX:   Temperature:   23.02 C
+W (6377178) LORA_RX:   Humidity:      57.79 %RH
+W (6377178) LORA_RX:   Leaf Wetness:  0.00 
+W (6377188) LORA_RX:   Soil Moisture: 55.50%
+W (6377188) LORA_RX: =======================================
+I (6377198) META_AI: Running Fog Ensemble Validation...
+I (6377198) META_AI: Nominal conditions. Averaging model scores.
+W (6377208) META_AI: Final validated risk: 0%
+I (6377288) CLOUD: Data pushed to Blynk.
+I (6377898) RAW_UART: +TEST: RXLRPKT
+
+I (7281618) RAW_UART: +TEST: LEN:14, RSSI:-29, SNR:8
++TEST: RX "00000E09FC160000AE1500000000"
+
+W (7281618) LORA_RX: =======================================
+W (7281618) LORA_RX: Received at:   2026-10-11 21:25:49
+W (7281618) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (7281628) LORA_RX:   Smith risk:    0%
+W (7281628) LORA_RX:   RF risk:       0%
+W (7281628) LORA_RX:   Temperature:   23.18 C
+W (7281638) LORA_RX:   Humidity:      58.84 %RH
+W (7281638) LORA_RX:   Leaf Wetness:  0.00 
+W (7281648) LORA_RX:   Soil Moisture: 55.50%
+W (7281648) LORA_RX: =======================================
+I (7281658) META_AI: Running Fog Ensemble Validation...
+I (7281658) META_AI: Nominal conditions. Averaging model scores.
+W (7281668) META_AI: Final validated risk: 0%
+I (7281768) CLOUD: Data pushed to Blynk.
+I (7282378) RAW_UART: +TEST: RXLRPKT
+
+I (8188068) RAW_UART: +TEST: LEN:14, RSSI:-23, SNR:9
++TEST: RX "00001409C6160000AE1500000000"
+
+W (8188068) LORA_RX: =======================================
+W (8188068) LORA_RX: Received at:   2026-10-11 21:40:56
+W (8188068) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (8188078) LORA_RX:   Smith risk:    0%
+W (8188078) LORA_RX:   RF risk:       0%
+W (8188078) LORA_RX:   Temperature:   23.24 C
+W (8188088) LORA_RX:   Humidity:      58.30 %RH
+W (8188088) LORA_RX:   Leaf Wetness:  0.00 
+W (8188098) LORA_RX:   Soil Moisture: 55.50%
+W (8188098) LORA_RX: =======================================
+I (8188108) META_AI: Running Fog Ensemble Validation...
+I (8188108) META_AI: Nominal conditions. Averaging model scores.
+W (8188118) META_AI: Final validated risk: 0%
+I (8188198) CLOUD: Data pushed to Blynk.
+I (8188808) RAW_UART: +TEST: RXLRPKT
+
+I (9094088) RAW_UART: +TEST: LEN:14, RSSI:-29, SNR:8
++TEST: RX "0000110977160000F21500000000"
+
+W (9094088) LORA_RX: =======================================
+W (9094088) LORA_RX: Received at:   2026-10-11 21:56:02
+W (9094088) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (9094098) LORA_RX:   Smith risk:    0%
+W (9094098) LORA_RX:   RF risk:       0%
+W (9094098) LORA_RX:   Temperature:   23.21 C
+W (9094108) LORA_RX:   Humidity:      57.51 %RH
+W (9094108) LORA_RX:   Leaf Wetness:  0.00 
+W (9094118) LORA_RX:   Soil Moisture: 56.18%
+W (9094118) LORA_RX: =======================================
+I (9094128) META_AI: Running Fog Ensemble Validation...
+I (9094128) META_AI: Nominal conditions. Averaging model scores.
+W (9094138) META_AI: Final validated risk: 0%
+I (9094228) CLOUD: Data pushed to Blynk.
+I (9094838) RAW_UART: +TEST: RXLRPKT
+
+I (9999288) RAW_UART: +TEST: LEN:14, RSSI:-22, SNR:8
++TEST: RX "0000050945160000B41500000000"
+
+W (9999288) LORA_RX: =======================================
+W (9999288) LORA_RX: Received at:   2026-10-11 22:11:07
+W (9999288) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (9999298) LORA_RX:   Smith risk:    0%
+W (9999298) LORA_RX:   RF risk:       0%
+W (9999298) LORA_RX:   Temperature:   23.09 C
+W (9999308) LORA_RX:   Humidity:      57.01 %RH
+W (9999308) LORA_RX:   Leaf Wetness:  0.00 
+W (9999318) LORA_RX:   Soil Moisture: 55.56%
+W (9999318) LORA_RX: =======================================
+I (9999328) META_AI: Running Fog Ensemble Validation...
+I (9999328) META_AI: Nominal conditions. Averaging model scores.
+W (9999338) META_AI: Final validated risk: 0%
+I (9999448) CLOUD: Data pushed to Blynk.
+I (10000068) RAW_UART: +TEST: RXLRPKT
+
+I (10906558) RAW_UART: +TEST: LEN:14, RSSI:-22, SNR:9
++TEST: RX "0000F7081B160000AE1500000000"
+
+W (10906558) LORA_RX: =======================================
+W (10906558) LORA_RX: Received at:   2026-10-11 22:26:14
+W (10906558) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (10906568) LORA_RX:   Smith risk:    0%
+W (10906568) LORA_RX:   RF risk:       0%
+W (10906578) LORA_RX:   Temperature:   22.95 C
+W (10906578) LORA_RX:   Humidity:      56.59 %RH
+W (10906578) LORA_RX:   Leaf Wetness:  0.00 
+W (10906588) LORA_RX:   Soil Moisture: 55.50%
+W (10906588) LORA_RX: =======================================
+I (10906598) META_AI: Running Fog Ensemble Validation...
+I (10906598) META_AI: Nominal conditions. Averaging model scores.
+W (10906608) META_AI: Final validated risk: 0%
+I (10906688) CLOUD: Data pushed to Blynk.
+I (10907298) RAW_UART: +TEST: RXLRPKT
+
+I (11812038) RAW_UART: +TEST: LEN:14, RSSI:-22, SNR:8
++TEST: RX "0000EC08FD150000E61500000000"
+
+W (11812038) LORA_RX: =======================================
+W (11812038) LORA_RX: Received at:   2026-10-11 22:41:19
+W (11812038) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (11812048) LORA_RX:   Smith risk:    0%
+W (11812048) LORA_RX:   RF risk:       0%
+W (11812058) LORA_RX:   Temperature:   22.84 C
+W (11812058) LORA_RX:   Humidity:      56.29 %RH
+W (11812058) LORA_RX:   Leaf Wetness:  0.00 
+W (11812068) LORA_RX:   Soil Moisture: 56.06%
+W (11812068) LORA_RX: =======================================
+I (11812078) META_AI: Running Fog Ensemble Validation...
+I (11812078) META_AI: Nominal conditions. Averaging model scores.
+W (11812088) META_AI: Final validated risk: 0%
+I (11812168) CLOUD: Data pushed to Blynk.
+I (11812778) RAW_UART: +TEST: RXLRPKT
+
+I (12717138) RAW_UART: +TEST: LEN:14, RSSI:-22, SNR:8
++TEST: RX "0000DB08D0150000AE1500000000"
+
+W (12717138) LORA_RX: =======================================
+W (12717138) LORA_RX: Received at:   2026-10-11 22:56:25
+W (12717138) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (12717148) LORA_RX:   Smith risk:    0%
+W (12717148) LORA_RX:   RF risk:       0%
+W (12717158) LORA_RX:   Temperature:   22.67 C
+W (12717158) LORA_RX:   Humidity:      55.84 %RH
+W (12717158) LORA_RX:   Leaf Wetness:  0.00 
+W (12717168) LORA_RX:   Soil Moisture: 55.50%
+W (12717168) LORA_RX: =======================================
+I (12717178) META_AI: Running Fog Ensemble Validation...
+I (12717178) META_AI: Nominal conditions. Averaging model scores.
+W (12717188) META_AI: Final validated risk: 0%
+I (12717278) CLOUD: Data pushed to Blynk.
+I (12717888) RAW_UART: +TEST: RXLRPKT
+
+I (13621158) RAW_UART: +TEST: LEN:14, RSSI:-22, SNR:9
++TEST: RX "0000D408CA150000AE1500000000"
+
+W (13621158) LORA_RX: =======================================
+W (13621158) LORA_RX: Received at:   2026-10-11 23:11:29
+W (13621158) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (13621168) LORA_RX:   Smith risk:    0%
+W (13621168) LORA_RX:   RF risk:       0%
+W (13621178) LORA_RX:   Temperature:   22.60 C
+W (13621178) LORA_RX:   Humidity:      55.78 %RH
+W (13621178) LORA_RX:   Leaf Wetness:  0.00 
+W (13621188) LORA_RX:   Soil Moisture: 55.50%
+W (13621188) LORA_RX: =======================================
+I (13621198) META_AI: Running Fog Ensemble Validation...
+I (13621198) META_AI: Nominal conditions. Averaging model scores.
+W (13621208) META_AI: Final validated risk: 0%
+I (13621278) CLOUD: Data pushed to Blynk.
+I (13621888) RAW_UART: +TEST: RXLRPKT
+
+I (14526328) RAW_UART: +TEST: LEN:14, RSSI:-22, SNR:8
++TEST: RX "0000C808A0150000F21500000000"
+
+W (14526328) LORA_RX: =======================================
+W (14526328) LORA_RX: Received at:   2026-10-11 23:26:34
+W (14526328) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (14526338) LORA_RX:   Smith risk:    0%
+W (14526338) LORA_RX:   RF risk:       0%
+W (14526348) LORA_RX:   Temperature:   22.48 C
+W (14526348) LORA_RX:   Humidity:      55.36 %RH
+W (14526348) LORA_RX:   Leaf Wetness:  0.00 
+W (14526358) LORA_RX:   Soil Moisture: 56.18%
+W (14526358) LORA_RX: =======================================
+I (14526368) META_AI: Running Fog Ensemble Validation...
+I (14526368) META_AI: Nominal conditions. Averaging model scores.
+W (14526378) META_AI: Final validated risk: 0%
+I (14526458) CLOUD: Data pushed to Blynk.
+I (14527078) RAW_UART: +TEST: RXLRPKT
+
+I (15431118) RAW_UART: +TEST: LEN:14, RSSI:-22, SNR:8
++TEST: RX "0000C0087B150000E61500000000"
+
+W (15431118) LORA_RX: =======================================
+W (15431118) LORA_RX: Received at:   2026-10-11 23:41:39
+W (15431118) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (15431128) LORA_RX:   Smith risk:    0%
+W (15431128) LORA_RX:   RF risk:       0%
+W (15431138) LORA_RX:   Temperature:   22.40 C
+W (15431138) LORA_RX:   Humidity:      54.99 %RH
+W (15431138) LORA_RX:   Leaf Wetness:  0.00 
+W (15431148) LORA_RX:   Soil Moisture: 56.06%
+W (15431148) LORA_RX: =======================================
+I (15431158) META_AI: Running Fog Ensemble Validation...
+I (15431158) META_AI: Nominal conditions. Averaging model scores.
+W (15431168) META_AI: Final validated risk: 0%
+I (15431248) CLOUD: Data pushed to Blynk.
+I (15431858) RAW_UART: +TEST: RXLRPKT
+
+I (16335148) RAW_UART: +TEST: LEN:14, RSSI:-22, SNR:8
++TEST: RX "0000B5088B150000E61500000000"
+
+W (16335148) LORA_RX: =======================================
+W (16335148) LORA_RX: Received at:   2026-10-11 23:56:43
+W (16335148) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (16335158) LORA_RX:   Smith risk:    0%
+W (16335158) LORA_RX:   RF risk:       0%
+W (16335168) LORA_RX:   Temperature:   22.29 C
+W (16335168) LORA_RX:   Humidity:      55.15 %RH
+W (16335168) LORA_RX:   Leaf Wetness:  0.00 
+W (16335178) LORA_RX:   Soil Moisture: 56.06%
+W (16335178) LORA_RX: =======================================
+I (16335188) META_AI: Running Fog Ensemble Validation...
+I (16335188) META_AI: Nominal conditions. Averaging model scores.
+W (16335198) META_AI: Final validated risk: 0%
+I (16335278) CLOUD: Data pushed to Blynk.
+I (16335898) RAW_UART: +TEST: RXLRPKT
+
+I (17241588) RAW_UART: +TEST: LEN:14, RSSI:-27, SNR:8
++TEST: RX "0000BA08C8150000E01500000000"
+
+W (17241588) LORA_RX: =======================================
+W (17241588) LORA_RX: Received at:   2026-10-12 00:11:49
+W (17241588) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (17241598) LORA_RX:   Smith risk:    0%
+W (17241598) LORA_RX:   RF risk:       0%
+W (17241608) LORA_RX:   Temperature:   22.34 C
+W (17241608) LORA_RX:   Humidity:      55.76 %RH
+W (17241608) LORA_RX:   Leaf Wetness:  0.00 
+W (17241618) LORA_RX:   Soil Moisture: 56.00%
+W (17241618) LORA_RX: =======================================
+I (17241628) META_AI: Running Fog Ensemble Validation...
+I (17241628) META_AI: Nominal conditions. Averaging model scores.
+W (17241638) META_AI: Final validated risk: 0%
+I (17241728) CLOUD: Data pushed to Blynk.
+I (17242338) RAW_UART: +TEST: RXLRPKT
+
+I (18148438) RAW_UART: +TEST: LEN:14, RSSI:-26, SNR:8
++TEST: RX "0000BB08D7150000F21500000000"
+
+W (18148438) LORA_RX: =======================================
+W (18148438) LORA_RX: Received at:   2026-10-12 00:26:56
+W (18148438) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (18148448) LORA_RX:   Smith risk:    0%
+W (18148448) LORA_RX:   RF risk:       0%
+W (18148458) LORA_RX:   Temperature:   22.35 C
+W (18148458) LORA_RX:   Humidity:      55.91 %RH
+W (18148458) LORA_RX:   Leaf Wetness:  0.00 
+W (18148468) LORA_RX:   Soil Moisture: 56.18%
+W (18148468) LORA_RX: =======================================
+I (18148478) META_AI: Running Fog Ensemble Validation...
+I (18148478) META_AI: Nominal conditions. Averaging model scores.
+W (18148488) META_AI: Final validated risk: 0%
+I (18148568) CLOUD: Data pushed to Blynk.
+I (18149178) RAW_UART: +TEST: RXLRPKT
+
+I (19053168) RAW_UART: +TEST: LEN:14, RSSI:-28, SNR:8
++TEST: RX "0000BE08DD151403E61500000000"
+
+W (19053168) LORA_RX: =======================================
+W (19053168) LORA_RX: Received at:   2026-10-12 00:42:01
+W (19053168) LORA_RX: CROP SENSOR DATA RECEIVED:
+W (19053178) LORA_RX:   Smith risk:    0%
+W (19053178) LORA_RX:   RF risk:       0%
+W (19053188) LORA_RX:   Temperature:   22.38 C
+W (19053188) LORA_RX:   Humidity:      55.97 %RH
+W (19053188) LORA_RX:   Leaf Wetness:  7.88
+W (19053198) LORA_RX:   Soil Moisture: 56.06%
+W (19053198) LORA_RX: =======================================
+I (19053208) META_AI: Running Fog Ensemble Validation...
+I (19053208) META_AI: Nominal conditions. Averaging model scores.
+W (19053218) META_AI: Final validated risk: 0%
+I (19053308) CLOUD: Data pushed to Blynk.
+I (19053928) RAW_UART: +TEST: RXLRPKT
+
