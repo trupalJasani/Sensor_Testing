@@ -338,6 +338,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -370,21 +371,62 @@ static WioE5_Object_t lora_radio;
 
 static EventGroupHandle_t wifi_event_group = NULL;
 
-/* ==================== 14-BYTE LORA PAYLOAD ==================== */
+/* ==================== 16-BYTE LORA PAYLOAD ==================== */
 
+/* Must match LoRaPayload_t in agri_node_test/main/vc_application.c.
+ * Little-endian, packed. Bytes 10-13 were reserved1/reserved2 (always 0
+ * in older node firmware, which decodes here as seq 0 / EBH 0 / flags 0).
+ * Bytes 14-15 (forecast) were added on 2026-10-14; 14-byte packets from
+ * older node firmware are still accepted and decode as "no forecast". */
 typedef struct __attribute__((packed))
 {
-    uint8_t smith_risk;
-    uint8_t rf_risk;
-    uint16_t temperature;
-    uint16_t humidity;
-    uint16_t leaf_wetness;
-    uint16_t soil_moisture;
-    uint16_t reserved1;
-    uint16_t reserved2;
+    uint8_t smith_risk;     /* byte 0      Smith Period 0/50/100 */
+    uint8_t rf_risk;        /* byte 1      trained RF 0/50/100 */
+    int16_t temperature;    /* bytes 2-3   C x 100, SIGNED (fix F2: was uint16_t) */
+    uint16_t humidity;      /* bytes 4-5   %RH x 100 */
+    uint16_t leaf_wetness;  /* bytes 6-7   Davis index (0..15) x 100 */
+    uint16_t soil_moisture; /* bytes 8-9   % x 100 (uncalibrated) */
+    uint16_t seq;           /* bytes 10-11 packet counter, restarts at 0 on node power-on */
+    uint8_t ir_ebh;         /* byte 12     Irish Rules: max effective blight hours in last 48 h */
+    uint8_t ir_flags;       /* byte 13     Irish Rules status bits (IR_FLAG_*) */
+    uint8_t fc_prob;        /* byte 14     forecast: P(next 24 h is a Smith day) x 100, 0xFF = n/a */
+    uint8_t fc_flags;       /* byte 15     forecast status bits + model version (FC_FLAG_*) */
 } LoRaPayload_t;
 
+_Static_assert(sizeof(LoRaPayload_t) == 16, "LoRa payload must be 16 bytes");
+
 #define LORA_PAYLOAD_SIZE sizeof(LoRaPayload_t)
+#define LORA_PAYLOAD_SIZE_LEGACY 14u   /* node firmware before 2026-10-14 */
+
+/* Irish Rules status bits - identical copy of agri_node_test/main/edge_ai.h */
+#define IR_FLAG_INFECTION_ACTIVE    (1u << 0)
+#define IR_FLAG_SPORULATION_PENDING (1u << 1)
+#define IR_FLAG_START_TRUNCATED     (1u << 2)
+#define IR_FLAG_INVALID_MET_HOURS   (1u << 3)
+#define IR_FLAG_UNKNOWN_WET_HOURS   (1u << 4)
+#define IR_FLAG_MODEL_ERROR         (1u << 7)
+
+/* Forecast status bits - identical copy of agri_node_test/main/edge_ai.h */
+#define FC_FLAG_WARNING        (1u << 0)
+#define FC_FLAG_GAPS_FILLED    (1u << 1)
+#define FC_FLAG_VERSION_SHIFT  4u
+#define FC_FLAG_VERSION_MASK   0x70u
+#define FC_FLAG_ERROR          (1u << 7)
+#define FC_PROB_NOT_AVAILABLE  0xFFu
+
+/* Irish Rules decision threshold in effective blight hours (EBH).
+ * 12 = Met Eireann operational practice. Cucak et al. 2019 propose
+ * 4-11 EBH, set during the season from local outbreak reports. It lives
+ * here, not on the node, so it can be changed without reflashing the node. */
+#define IR_EBH_WARNING_THRESHOLD 12
+
+/* Set to 1 only after creating a V7 datastream (integer, 0-255) in the
+ * Blynk template; until then EBH is logged on serial only. */
+#define BLYNK_PUSH_IR_EBH 0
+
+/* Set to 1 only after creating a V8 datastream (integer, 0-100) in the
+ * Blynk template; until then the forecast is logged on serial only. */
+#define BLYNK_PUSH_FORECAST 0
 
 /* ==================== META CLASSIFIER ==================== */
 
@@ -533,7 +575,7 @@ static void Blynk_Update(const LoRaPayload_t *p, uint8_t final_risk)
     float humidity = p->humidity / 100.0f;
     float leaf_wetness = p->leaf_wetness / 100.0f;
     float soil_moisture = p->soil_moisture / 100.0f;
-    snprintf(url, sizeof(url),
+    int url_len = snprintf(url, sizeof(url),
              "http://blynk.cloud/external/api/batch/update?token=%s"
              "&V0=%.2f&V1=%.2f&V2=%.2f&V3=%.2f&V4=%d&V5=%d&V6=%d",
              BLYNK_AUTH_TOKEN,
@@ -544,6 +586,25 @@ static void Blynk_Update(const LoRaPayload_t *p, uint8_t final_risk)
              p->smith_risk,
              p->rf_risk,
              final_risk);
+#if BLYNK_PUSH_IR_EBH
+    if (url_len > 0 && url_len < (int)sizeof(url))
+    {
+        url_len += snprintf(url + url_len, sizeof(url) - (size_t)url_len, "&V7=%u",
+                            (unsigned)p->ir_ebh);
+    }
+#endif
+#if BLYNK_PUSH_FORECAST
+    if (url_len > 0 && url_len < (int)sizeof(url) && p->fc_prob != FC_PROB_NOT_AVAILABLE)
+    {
+        url_len += snprintf(url + url_len, sizeof(url) - (size_t)url_len, "&V8=%u",
+                            (unsigned)p->fc_prob);
+    }
+#endif
+    if (url_len <= 0 || url_len >= (int)sizeof(url))
+    {
+        ESP_LOGE("CLOUD", "Blynk URL truncated; update skipped.");
+        return;
+    }
     esp_http_client_config_t config = {
         .url = url,
         .method = HTTP_METHOD_GET,
@@ -563,6 +624,81 @@ static void Blynk_Update(const LoRaPayload_t *p, uint8_t final_risk)
     esp_http_client_cleanup(client);
 }
 
+/* ==================== SEQUENCE + IRISH RULES ==================== */
+
+/**
+ * @brief Logs lost packets or a node restart from the sequence number.
+ *        The node's counter restarts at 0 after a power-on reset.
+ */
+static void Check_Sequence(uint16_t seq)
+{
+    static bool have_last = false;
+    static uint16_t last_seq = 0;
+
+    if (have_last)
+    {
+        uint16_t expected = (uint16_t)(last_seq + 1u);
+        if (seq == expected)
+        {
+            /* in order */
+        }
+        else if (seq == 0u)
+        {
+            ESP_LOGW("LORA_RX", "  Seq reset to 0 (node restarted or old firmware).");
+        }
+        else
+        {
+            uint16_t missed = (uint16_t)(seq - expected);
+            ESP_LOGW("LORA_RX", "  Seq jump %u -> %u: %u packet(s) missing.",
+                     (unsigned)last_seq, (unsigned)seq, (unsigned)missed);
+        }
+    }
+    last_seq = seq;
+    have_last = true;
+}
+
+/**
+ * @brief Logs the node's Irish Rules result and the warning decision.
+ *        EBH = effective blight hours (hours favourable for infection),
+ *        not a disease probability.
+ */
+static void Log_Irish_Rules(const LoRaPayload_t *p)
+{
+    if (p->ir_flags & IR_FLAG_MODEL_ERROR)
+    {
+        ESP_LOGE("IRISH_RULES", "Node reported a model error; EBH not available.");
+        return;
+    }
+    ESP_LOGW("IRISH_RULES", "  EBH (48h max): %u  [threshold %d] -> %s",
+             (unsigned)p->ir_ebh, IR_EBH_WARNING_THRESHOLD,
+             (p->ir_ebh >= IR_EBH_WARNING_THRESHOLD) ? "BLIGHT WARNING" : "no warning");
+    ESP_LOGI("IRISH_RULES", "  flags 0x%02X:%s%s%s%s%s", (unsigned)p->ir_flags,
+             (p->ir_flags & IR_FLAG_INFECTION_ACTIVE) ? " infection-active" : "",
+             (p->ir_flags & IR_FLAG_SPORULATION_PENDING) ? " sporulation-pending" : "",
+             (p->ir_flags & IR_FLAG_START_TRUNCATED) ? " start-truncated" : "",
+             (p->ir_flags & IR_FLAG_INVALID_MET_HOURS) ? " invalid-T/RH-hours" : "",
+             (p->ir_flags & IR_FLAG_UNKNOWN_WET_HOURS) ? " unknown-wetness-hours" : "");
+}
+
+/**
+ * @brief Logs the node's 24-h forecast (Edge-ML Random Forest).
+ *        The value is a forecast of risk WEATHER (Smith-day criterion in
+ *        the next 24 h), not a probability of disease.
+ */
+static void Log_Forecast(const LoRaPayload_t *p)
+{
+    if ((p->fc_flags & FC_FLAG_ERROR) || p->fc_prob == FC_PROB_NOT_AVAILABLE)
+    {
+        ESP_LOGW("FORECAST", "  No forecast in this packet (node error or old firmware).");
+        return;
+    }
+    ESP_LOGW("FORECAST", "  Next 24 h Smith-day probability: %u%% -> %s",
+             (unsigned)p->fc_prob,
+             (p->fc_flags & FC_FLAG_WARNING) ? "EARLY WARNING" : "no warning");
+    ESP_LOGI("FORECAST", "  model v%u%s", (unsigned)((p->fc_flags & FC_FLAG_VERSION_MASK) >> FC_FLAG_VERSION_SHIFT),
+             (p->fc_flags & FC_FLAG_GAPS_FILLED) ? ", missing hours bridged" : "");
+}
+
 /* ==================== LORA PAYLOAD DECODER ==================== */
 
 static void ParseAndPrintPayload(const char *raw_packet)
@@ -575,15 +711,17 @@ static void ParseAndPrintPayload(const char *raw_packet)
     if (end_quote == NULL)
         return;
     size_t hex_len = end_quote - start_quote;
-    if (hex_len != LORA_PAYLOAD_SIZE * 2)
+    if (hex_len != LORA_PAYLOAD_SIZE * 2 && hex_len != LORA_PAYLOAD_SIZE_LEGACY * 2)
     {
         ESP_LOGE("LORA_RX",
                  "Invalid payload size: %d hex characters.",
                  (int)hex_len);
         return;
     }
+    size_t n_bytes = hex_len / 2;
     uint8_t raw_bytes[LORA_PAYLOAD_SIZE];
-    for (size_t i = 0; i < LORA_PAYLOAD_SIZE; i++)
+    memset(raw_bytes, 0, sizeof(raw_bytes));
+    for (size_t i = 0; i < n_bytes; i++)
     {
         char hex_byte[3] = {
             start_quote[i * 2],
@@ -593,6 +731,12 @@ static void ParseAndPrintPayload(const char *raw_packet)
     }
     LoRaPayload_t payload;
     memcpy(&payload, raw_bytes, LORA_PAYLOAD_SIZE);
+    if (n_bytes == LORA_PAYLOAD_SIZE_LEGACY)
+    {
+        /* Older node firmware: no forecast bytes. */
+        payload.fc_prob = FC_PROB_NOT_AVAILABLE;
+        payload.fc_flags = FC_FLAG_ERROR;
+    }
     float temperature = payload.temperature / 100.0f;
     float humidity = payload.humidity / 100.0f;
     float leaf_wetness = payload.leaf_wetness / 100.0f;
@@ -620,6 +764,10 @@ static void ParseAndPrintPayload(const char *raw_packet)
     ESP_LOGW("LORA_RX", "  Humidity:      %.2f %%RH", humidity);
     ESP_LOGW("LORA_RX", "  Leaf Wetness:  %.2f ", leaf_wetness);
     ESP_LOGW("LORA_RX", "  Soil Moisture: %.2f%%", soil_moisture);
+    ESP_LOGW("LORA_RX", "  Seq:           %u", (unsigned)payload.seq);
+    Check_Sequence(payload.seq);
+    Log_Irish_Rules(&payload);
+    Log_Forecast(&payload);
     ESP_LOGW("LORA_RX", "=======================================");
     uint8_t final_risk = execute_meta_classifier(&payload);
     ESP_LOGW("META_AI", "Final validated risk: %d%%", final_risk);

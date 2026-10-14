@@ -1,0 +1,103 @@
+persistence on validation: CSI=0.231 POD=0.374 FAR=0.623
+rows train/val/test = 209304/36648/36179; base rate train 0.1536 val 0.1530 test 0.1375  (3s)
+  logreg         AP=0.4422 AUC=0.8182 BSS=0.183 CSI=0.313@0.27 size=None fit=2s
+  tree_d4        AP=0.3382 AUC=0.7615 BSS=0.124 CSI=0.263@0.22 size=279 fit=1s
+  tree_d6        AP=0.3917 AUC=0.7876 BSS=0.151 CSI=0.286@0.26 size=1125 fit=1s
+  tree_d8        AP=0.4117 AUC=0.7957 BSS=0.154 CSI=0.294@0.23 size=3951 fit=2s
+  tree_d10       AP=0.4104 AUC=0.7941 BSS=0.139 CSI=0.298@0.24 size=9639 fit=2s
+  rf_n10_d6      AP=0.4241 AUC=0.8043 BSS=0.170 CSI=0.297@0.24 size=11108 fit=2s
+  rf_n10_d8      AP=0.4522 AUC=0.8180 BSS=0.190 CSI=0.317@0.26 size=38198 fit=2s
+  rf_n10_d10     AP=0.4617 AUC=0.8243 BSS=0.200 CSI=0.324@0.26 size=104330 fit=2s
+  rf_n10_d12     AP=0.4665 AUC=0.8230 BSS=0.199 CSI=0.321@0.26 size=207578 fit=2s
+  rf_n20_d6      AP=0.4216 AUC=0.8054 BSS=0.170 CSI=0.303@0.24 size=21784 fit=2s
+  rf_n20_d8      AP=0.4531 AUC=0.8201 BSS=0.191 CSI=0.319@0.24 size=76000 fit=3s
+  rf_n20_d10     AP=0.4673 AUC=0.8259 BSS=0.203 CSI=0.325@0.27 size=208336 fit=4s
+  rf_n20_d12     AP=0.4698 AUC=0.8247 BSS=0.202 CSI=0.321@0.27 size=419440 fit=4s
+  rf_n40_d6      AP=0.4281 AUC=0.8064 BSS=0.171 CSI=0.302@0.23 size=44198 fit=5s
+  rf_n40_d8      AP=0.4545 AUC=0.8199 BSS=0.191 CSI=0.319@0.25 size=153620 fit=6s
+  rf_n40_d10     AP=0.4655 AUC=0.8250 BSS=0.201 CSI=0.322@0.25 size=420380 fit=7s
+  rf_n40_d12     AP=0.4715 AUC=0.8271 BSS=0.204 CSI=0.325@0.27 size=1238202 fit=9s
+  gb_n100_d3     AP=0.4769 AUC=0.8272 BSS=0.208 CSI=0.324@0.28 size=None fit=63s
+  gb_n200_d3     AP=0.4852 AUC=0.8312 BSS=0.213 CSI=0.327@0.30 size=None fit=119s
+chosen: rf_n10_d8 (val AP 0.4522, best RF AP within budget 0.4522), threshold 0.26
+C export: {'n_trees': 10, 'n_nodes': 4242, 'max_depth': 8, 'table_bytes': 38198, 'max_abs_prob_diff': 1.0789960014356836e-07, 'decision_mismatches': 0, 'rows_within_1e5_of_threshold': 0, 'rows_checked': 36179}
+{
+ "rf": {
+  "model": "rf_n10_d8",
+  "threshold": 0.26,
+  "roc_auc": 0.8231310642553427,
+  "avg_precision": 0.4507714308185822,
+  "brier": 0.0955057357223515,
+  "bss": 0.1962394180189636,
+  "tp": 2829,
+  "fp": 4245,
+  "fn": 2144,
+  "tn": 26961,
+  "pod": 0.5688719083048461,
+  "far": 0.6000848176420696,
+  "pofd": 0.13603153239761584,
+  "csi": 0.30689954436971145,
+  "precision": 0.39991518235793044,
+  "f1": 0.46966049638914253,
+  "pss": 0.4328403759072303,
+  "accuracy": 0.823405843168689
+ },
+ "persistence": {
+  "model": "persistence (last 24 h was a Smith day)",
+  "tp": 1808,
+  "fp": 3168,
+  "fn": 3165,
+  "tn": 28038,
+  "pod": 0.3635632415041223,
+  "far": 0.6366559485530546,
+  "pofd": 0.10151893866564123,
+  "csi": 0.2220857388527208,
+  "precision": 0.3633440514469453,
+  "f1": 0.36345361342848526,
+  "pss": 0.26204430283848107,
+  "accuracy": 0.8249537024240582
+ },
+ "bootstrap_95ci": {
+  "rf_csi": [
+   0.2707190921404951,
+   0.337862270718058
+  ],
+  "persistence_csi": [
+   0.1748427111917779,
+   0.25625930556006754
+  ],
+  "csi_rf_minus_persistence": [
+   0.07019292891941976,
+   0.10765494990332347
+  ],
+  "rf_avg_precision": [
+   0.38482126117634974,
+   0.5064011644646188
+  ],
+  "rf_pod": [
+   0.5288980358441621,
+   0.5973139968143963
+  ],
+  "persistence_pod": [
+   0.2985002594179983,
+   0.4079684607480426
+  ]
+ },
+ "onset_lead": {
+  "rf": {
+   "onsets": 171,
+   "warned_ge1h": 0.8421052631578947,
+   "warned_ge6h": 0.4619883040935672,
+   "warned_ge12h": 0.14619883040935672,
+   "median_lead_h": 5.0
+  },
+  "persistence": {
+   "onsets": 171,
+   "warned_ge1h": 0.0,
+   "warned_ge6h": 0.0,
+   "warned_ge12h": 0.0,
+   "median_lead_h": 0.0
+  }
+ }
+}
+done in 257s

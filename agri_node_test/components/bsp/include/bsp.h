@@ -18,11 +18,15 @@ extern "C" {
 
 /* --- System Timing --- */
 void BSP_Delay(uint32_t ms);
+uint32_t BSP_GetTick(void);   /* ms since boot, for driver timeouts */
 
 /* --- LoRa Radio (Wio-E5 via UART) --- */
 int32_t bsp_uart_init(void);
 int32_t bsp_uart_write(const uint8_t *data, uint16_t length);
 int32_t bsp_uart_read(uint8_t *buffer, uint16_t max_length);
+/* Removes the UART driver and holds TX high / RX pulled up through deep sleep.
+   Call after the Wio-E5 is in AT+LOWPOWER, right before esp_deep_sleep_start(). */
+int32_t bsp_uart_prepare_deep_sleep(void);
 
 /* --- SHT31 Temperature & Humidity (via I2C) --- */
 extern SHT31_IO_t BSP_SHT31;

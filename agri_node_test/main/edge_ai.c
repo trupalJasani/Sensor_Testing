@@ -8,6 +8,7 @@
 #include "edge_ai.h"
 #include "esp_log.h"
 #include <stdbool.h>
+#include <string.h>
 #include "rf_model.h"   
 #include "rf_model_smith_dpd.h"    /* Trained on real DWD data (station 4104, 1948-2024) */
 #include "rf_model_tomcast_dpd.h"  /* Trained on real DWD data + dew point depression proxy */
@@ -15,19 +16,37 @@
 
 static const char *TAG = "EDGE_AI";
 
-/* Define the ADC threshold where the leaf is officially considered "wet" */
-#define LEAF_WET_THRESHOLD 1500.0f 
-
 static float chrono_temp[BUFFER_SIZE];
 static float chrono_hum[BUFFER_SIZE];
 static float chrono_leaf[BUFFER_SIZE];
 
-/* --- Helper Function: Unroll the Ring Buffer --- */
+/* Irish Rules working buffer: one entry per hour of the 48-h window. */
+#define IR_HOURS_IN_BUFFER (BUFFER_SIZE / EDGE_AI_SAMPLES_PER_HOUR)
+static ir_hour_t ir_hours[IR_HOURS_IN_BUFFER];
+
+/**
+ * @brief  Returns true if a leaf-wetness index sample counts as wet.
+ * @param  leaf_index  Davis index 0..15 as stored in the ring buffer.
+ */
+static inline bool leaf_is_wet(float leaf_index)
+{
+    return leaf_index >= EDGE_AI_LEAF_WET_INDEX_THRESHOLD;
+}
+
+/**
+ * @brief  Copies the ring buffers into chrono_* in time order.
+ *
+ * chrono_*[0] is the OLDEST sample and chrono_*[BUFFER_SIZE-1] the NEWEST.
+ * current_idx is the slot written in this cycle (the newest sample), so the
+ * oldest sample is the next slot, (current_idx + 1) % BUFFER_SIZE.
+ * (Fix F5: the previous version started at current_idx and placed the
+ * newest sample first.)
+ */
 static void unroll_buffer(float *temp_in, float *hum_in, float *leaf_in, int current_idx)
 {
     for (int i = 0; i < BUFFER_SIZE; i++)
     {
-        int physical_idx = (current_idx + i) % BUFFER_SIZE;
+        int physical_idx = (current_idx + 1 + i) % BUFFER_SIZE;
         /* Write directly to the static global arrays */
         chrono_temp[i]  = temp_in[physical_idx];
         chrono_hum[i]   = hum_in[physical_idx];
@@ -91,7 +110,7 @@ uint8_t run_heuristic_ai_risk(float *temp_history, float *hum_history, float *le
             avg_hum += chrono_hum[i];
             
             /* Count how many 15-minute blocks the leaf was physically wet */
-            if (chrono_leaf[i] > LEAF_WET_THRESHOLD) {
+            if (leaf_is_wet(chrono_leaf[i])) {
                 wet_samples++;
             }
             valid_samples++;
@@ -163,14 +182,14 @@ uint8_t run_trained_random_forest_inference(float *temp_history, float *hum_hist
     for (int i = 0; i < 96; i++) {
         if (chrono_temp[i] != 0.0f && chrono_temp[i] < day1_min_temp) day1_min_temp = chrono_temp[i];
         if (chrono_hum[i] >= 90.0f) day1_high_hum++;
-        if (chrono_leaf[i] > LEAF_WET_THRESHOLD) wet_samples++;
+        if (leaf_is_wet(chrono_leaf[i])) wet_samples++;
     }
 
     /* Day 2 (newest 24h = 96 samples) */
     for (int i = 96; i < BUFFER_SIZE; i++) {
         if (chrono_temp[i] != 0.0f && chrono_temp[i] < day2_min_temp) day2_min_temp = chrono_temp[i];
         if (chrono_hum[i] >= 90.0f) day2_high_hum++;
-        if (chrono_leaf[i] > LEAF_WET_THRESHOLD) wet_samples++;
+        if (leaf_is_wet(chrono_leaf[i])) wet_samples++;
     }
 
     float swd_hours = (wet_samples * 15.0f) / 60.0f;
@@ -250,7 +269,7 @@ uint8_t calculate_tomcast_dsv(float *temp_history, float *hum_history, float *le
     float wet_temp_sum = 0.0f;
 
     for (int i = 96; i < BUFFER_SIZE; i++) {
-        if (chrono_leaf[i] > LEAF_WET_THRESHOLD) {
+        if (leaf_is_wet(chrono_leaf[i])) {
             wet_samples++;
             wet_temp_sum += chrono_temp[i];
         }
@@ -396,4 +415,157 @@ uint8_t run_trained_tomcast_dpd_rf(float *temp_history, float *hum_history, floa
              wet_hours, mean_wet_temp, class_to_risk[class_idx]);
 
     return class_to_risk[class_idx];
+}
+
+/* ==========================================================================
+   7. IRISH RULES (Bourke 1953; Cucak et al. 2019) WITH MEASURED LEAF WETNESS
+   ==========================================================================
+   The original model infers leaf wetness from rain (>= 0.1 mm within +/-3 h
+   of the end of sporulation). Here the Davis sensor provides it directly:
+   an hour is wet if >= 2 of its 4 samples reach EDGE_AI_LEAF_WET_INDEX_
+   THRESHOLD. Model logic and its tests live in components/late_blight_ir.
+   ========================================================================== */
+int32_t run_irish_rules_risk(float *temp_history, float *hum_history, float *leaf_history, int current_index,
+                             edge_ai_ir_output_t *out)
+{
+    ir_hourly_cfg_t cfg;
+    ir_params_t params;
+    uint16_t n_hours = 0;
+    ir_status_t status;
+
+    if (out == NULL) {
+        return -1;
+    }
+    memset(out, 0, sizeof(*out));
+    out->flags = IR_FLAG_MODEL_ERROR;
+
+    if (temp_history == NULL || hum_history == NULL || leaf_history == NULL ||
+        current_index < 0 || current_index >= BUFFER_SIZE) {
+        ESP_LOGE(TAG, "Irish Rules - invalid arguments (index %d)", current_index);
+        return -1;
+    }
+
+    unroll_buffer(temp_history, hum_history, leaf_history, current_index);
+
+    status = ir_hourly_cfg_init(&cfg, EDGE_AI_LEAF_WET_INDEX_THRESHOLD);
+    if (status == IR_OK) {
+        cfg.samples_per_hour = EDGE_AI_SAMPLES_PER_HOUR;
+        status = ir_params_init(&params, EDGE_AI_IR_PRESET);
+    }
+    if (status == IR_OK) {
+        status = ir_aggregate_hours(&cfg, chrono_temp, chrono_hum, chrono_leaf, BUFFER_SIZE,
+                                    ir_hours, IR_HOURS_IN_BUFFER, &n_hours);
+    }
+    if (status == IR_OK) {
+        status = ir_evaluate(&params, ir_hours, n_hours, NULL, &out->detail);
+    }
+    if (status != IR_OK) {
+        memset(&out->detail, 0, sizeof(out->detail));
+        ESP_LOGE(TAG, "Irish Rules - model error, status %d", (int)status);
+        return -1;
+    }
+
+    out->ebh_max = out->detail.ebh_max;
+    out->ebh_current = out->detail.ebh_current;
+    out->flags = 0;
+    if (out->detail.infection_active)        out->flags |= IR_FLAG_INFECTION_ACTIVE;
+    if (out->detail.sporulation_pending)     out->flags |= IR_FLAG_SPORULATION_PENDING;
+    if (out->detail.start_truncated)         out->flags |= IR_FLAG_START_TRUNCATED;
+    if (out->detail.invalid_met_hours > 0)   out->flags |= IR_FLAG_INVALID_MET_HOURS;
+    if (out->detail.unknown_wet_hours > 0)   out->flags |= IR_FLAG_UNKNOWN_WET_HOURS;
+
+    ESP_LOGI(TAG, "Irish Rules (48h) - favourable=%uh wet=%uh sporulations=%u starts wet/dry=%u/%u "
+                  "EBH max=%u now=%u gap=%uh flags=0x%02X",
+             (unsigned)out->detail.favourable_hours, (unsigned)out->detail.wet_hours,
+             (unsigned)out->detail.sporulation_events, (unsigned)out->detail.infection_starts_wet,
+             (unsigned)out->detail.infection_starts_dry, (unsigned)out->ebh_max,
+             (unsigned)out->ebh_current, (unsigned)out->detail.gap_hours_current,
+             (unsigned)out->flags);
+
+    return 0;
+}
+
+/* ==========================================================================
+   8. EDGE-ML FORECAST: NEXT-24-H SMITH-DAY PROBABILITY (Random Forest)
+   ==========================================================================
+   Uses the same hourly aggregation as the Irish Rules (>= 3 of 4 valid
+   samples per hour). Features and the forest live in
+   components/blight_forecast; the training pipeline is in ml_forecast/.
+   ========================================================================== */
+static float fc_temp[IR_HOURS_IN_BUFFER];
+static float fc_rh[IR_HOURS_IN_BUFFER];
+static uint8_t fc_valid[IR_HOURS_IN_BUFFER];
+
+int32_t run_blight_forecast(float *temp_history, float *hum_history, float *leaf_history, int current_index,
+                            edge_ai_fc_output_t *out, int64_t (*clock_us)(void))
+{
+    ir_hourly_cfg_t cfg;
+    uint16_t n_hours = 0;
+    float features[BF_N_FEATURES];
+    uint8_t filled = 0;
+    int64_t t0 = 0, t1 = 0, t2 = 0;
+    ir_status_t ir_st;
+    bf_status_t bf_st;
+
+    if (out == NULL) {
+        return -1;
+    }
+    out->probability = 0.0f;
+    out->prob_pct = FC_PROB_NOT_AVAILABLE;
+    out->flags = (uint8_t)(FC_FLAG_ERROR | (FC_MODEL_VERSION << FC_FLAG_VERSION_SHIFT));
+    out->feature_us = -1;
+    out->model_us = -1;
+
+    if (temp_history == NULL || hum_history == NULL || leaf_history == NULL ||
+        current_index < 0 || current_index >= BUFFER_SIZE) {
+        ESP_LOGE(TAG, "Forecast - invalid arguments (index %d)", current_index);
+        return -1;
+    }
+
+    unroll_buffer(temp_history, hum_history, leaf_history, current_index);
+
+    ir_st = ir_hourly_cfg_init(&cfg, EDGE_AI_LEAF_WET_INDEX_THRESHOLD);
+    if (ir_st == IR_OK) {
+        cfg.samples_per_hour = EDGE_AI_SAMPLES_PER_HOUR;
+        ir_st = ir_aggregate_hours(&cfg, chrono_temp, chrono_hum, chrono_leaf, BUFFER_SIZE,
+                                   ir_hours, IR_HOURS_IN_BUFFER, &n_hours);
+    }
+    if (ir_st != IR_OK || n_hours != BF_HISTORY_HOURS) {
+        ESP_LOGE(TAG, "Forecast - hourly aggregation failed (status %d, %u h)", (int)ir_st, (unsigned)n_hours);
+        return -1;
+    }
+    for (uint16_t h = 0; h < n_hours; h++) {
+        fc_temp[h] = ir_hours[h].temp_c;
+        fc_rh[h] = ir_hours[h].rh_pct;
+        fc_valid[h] = ir_hours[h].met_valid;
+    }
+
+    if (clock_us != NULL) t0 = clock_us();
+    bf_st = bf_compute_features(fc_temp, fc_rh, fc_valid, n_hours, features, &filled);
+    if (clock_us != NULL) t1 = clock_us();
+    if (bf_st == BF_OK) {
+        bf_st = bf_predict_proba(features, &out->probability);
+    }
+    if (clock_us != NULL) t2 = clock_us();
+    if (bf_st != BF_OK) {
+        out->probability = 0.0f;
+        ESP_LOGE(TAG, "Forecast - no forecast this cycle (status %d: too many missing hours?)", (int)bf_st);
+        return -1;
+    }
+
+    if (clock_us != NULL) {
+        out->feature_us = (int32_t)(t1 - t0);
+        out->model_us = (int32_t)(t2 - t1);
+    }
+    out->prob_pct = (uint8_t)(out->probability * 100.0f + 0.5f);
+    out->flags = (uint8_t)(FC_MODEL_VERSION << FC_FLAG_VERSION_SHIFT);
+    if (out->probability >= bf_warning_threshold()) out->flags |= FC_FLAG_WARNING;
+    if (filled > 0)                                  out->flags |= FC_FLAG_GAPS_FILLED;
+
+    ESP_LOGI(TAG, "Forecast next 24h - Smith-day probability %u%% (threshold %u%%) -> %s | "
+                  "features %ld us, forest %ld us | %s",
+             (unsigned)out->prob_pct, (unsigned)(bf_warning_threshold() * 100.0f + 0.5f),
+             (out->flags & FC_FLAG_WARNING) ? "WARNING" : "no warning",
+             (long)out->feature_us, (long)out->model_us, bf_model_id());
+    return 0;
 }

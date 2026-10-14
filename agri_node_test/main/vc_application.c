@@ -19,6 +19,7 @@
 #include "driver/gpio.h"
 #include "nvs_flash.h"
 #include "nvs.h"
+#include "esp_timer.h"
 #include "sht31.h"
 #include "bsp.h"
 #include "wio_e5.h"
@@ -86,19 +87,33 @@ RTC_DATA_ATTR float rtc_hum_history[BUFFER_SIZE];
 RTC_DATA_ATTR float rtc_leaf_history[BUFFER_SIZE];
 RTC_DATA_ATTR int rtc_history_index = 0;
 
-/* ==================== 14-BYTE LORA PAYLOAD ==================== */
+/* Packet sequence number. Kept in RTC memory, so it survives deep sleep and
+ * restarts at 0 after a power-on reset (the gateway uses jumps to count
+ * lost packets and spot restarts). */
+RTC_DATA_ATTR uint16_t rtc_tx_seq = 0;
+
+/* ==================== 16-BYTE LORA PAYLOAD ==================== */
+/* Little-endian, packed. Bytes 10-13 were reserved1/reserved2 (always 0)
+ * before 2026-10-13; bytes 14-15 (forecast) were added on 2026-10-14.
+ * The gateway struct in agri_gateway/main/main.c must match this layout
+ * (it still accepts the old 14-byte packets). */
 
 typedef struct __attribute__((packed))
 {
-    uint8_t smith_risk;
-    uint8_t rf_risk;
-    int16_t temperature;
-    uint16_t humidity;
-    uint16_t leaf_wetness;
-    uint16_t soil_moisture;
-    uint16_t reserved1;
-    uint16_t reserved2;
+    uint8_t smith_risk;     /* byte 0      Smith Period 0/50/100 */
+    uint8_t rf_risk;        /* byte 1      trained RF 0/50/100 */
+    int16_t temperature;    /* bytes 2-3   C x 100, signed */
+    uint16_t humidity;      /* bytes 4-5   %RH x 100 */
+    uint16_t leaf_wetness;  /* bytes 6-7   Davis index (0..15) x 100 */
+    uint16_t soil_moisture; /* bytes 8-9   % x 100 (uncalibrated) */
+    uint16_t seq;           /* bytes 10-11 packet counter */
+    uint8_t ir_ebh;         /* byte 12     Irish Rules: max EBH in last 48 h (saturates at 255) */
+    uint8_t ir_flags;       /* byte 13     Irish Rules status bits, IR_FLAG_* in edge_ai.h */
+    uint8_t fc_prob;        /* byte 14     forecast: P(next 24 h is a Smith day) x 100, 0xFF = n/a */
+    uint8_t fc_flags;       /* byte 15     forecast status bits + model version, FC_FLAG_* in edge_ai.h */
 } LoRaPayload_t;
+
+_Static_assert(sizeof(LoRaPayload_t) == 16, "LoRa payload must be 16 bytes (gateway expects 32 hex chars)");
 
 static LoRaPayload_t tx_payload;
 
@@ -297,38 +312,96 @@ static void load_history_from_nvs(void)
 }
 
 /**
- * @brief Initializes and configures the Wio-E5 LoRa module.
+ * @brief Initializes the UART, wakes the Wio-E5 from AT+LOWPOWER and
+ *        configures it for LoRa P2P (TEST mode).
+ *
+ * The module is woken on every cycle. On the very first boot it is already
+ * awake; the wake-up sequence is harmless then. A module that does not
+ * answer is logged but not treated as fatal: the cycle continues exactly as
+ * before (blind configuration + transmit), so a radio problem never stops
+ * the sensor logging or traps the node in STATE_ERROR reboots.
+ *
+ * @return ESP_OK, or ESP_FAIL if the UART or driver could not be set up.
  */
 static esp_err_t LoRa_Init(void)
 {
-    bsp_uart_init();
-
-    WioE5_IO_t lora_io =
-        {
-            NULL,
-            bsp_uart_write,
-            bsp_uart_read,
-            BSP_Delay};
-
-    if (WioE5_RegisterBusIO(
-            &lora_radio,
-            &lora_io) != 0)
+    if (bsp_uart_init() != 0)
     {
-        ESP_LOGE(
-            TAG,
-            "LoRa RegisterBusIO failed");
-
+        ESP_LOGE(TAG, "LoRa UART init failed");
         return ESP_FAIL;
     }
 
-    WIO_E5_Driver.Init(&lora_radio);
+    WioE5_IO_t lora_io = {
+        .Init = NULL,
+        .Write = bsp_uart_write,
+        .Read = bsp_uart_read,
+        .Delay = BSP_Delay,
+        .GetTick = BSP_GetTick,
+    };
+
+    if (WioE5_RegisterBusIO(&lora_radio, &lora_io) != WIO_E5_OK)
+    {
+        ESP_LOGE(TAG, "LoRa RegisterBusIO failed");
+        return ESP_FAIL;
+    }
+
+    if (WIO_E5_Driver.Init(&lora_radio) != WIO_E5_OK)
+    {
+        ESP_LOGE(TAG, "LoRa driver init failed");
+        return ESP_FAIL;
+    }
+
+    /* Wake the module from AT+LOWPOWER (entered at the end of the last cycle) */
+    int64_t t_wake = esp_timer_get_time();
+    int32_t wake = WIO_E5_Driver.Wakeup(&lora_radio);
+    int64_t wake_ms = (esp_timer_get_time() - t_wake) / 1000;
+
+    if (wake == WIO_E5_OK)
+    {
+        ESP_LOGI(TAG, "Wio-E5 awake after %lld ms", (long long)wake_ms);
+    }
+    else
+    {
+        ESP_LOGW(TAG,
+                 "Wio-E5 did not answer the wake-up (%ld) after %lld ms, "
+                 "configuring anyway. Last response: '%s'",
+                 (long)wake, (long long)wake_ms, lora_radio.last_resp);
+    }
+
+    /* Re-sent every cycle (as before): cheap, and correct even if the module
+     * lost its TEST-mode settings through a reset or power loss. */
     WIO_E5_Driver.ConfigP2P(&lora_radio);
 
-    ESP_LOGI(
-        TAG,
-        "LoRa Wio-E5 initialized (P2P Mode)");
+    ESP_LOGI(TAG, "LoRa Wio-E5 initialized (P2P Mode)");
 
     return ESP_OK;
+}
+
+/**
+ * @brief Puts the Wio-E5 into AT+LOWPOWER and parks the UART pins so the
+ *        module is not woken by a floating line while the ESP32 sleeps.
+ *        Called once per cycle, right before deep sleep. Failure is logged,
+ *        not fatal (the module then simply stays awake, as in the old code).
+ */
+static void LoRa_Enter_Low_Power(void)
+{
+    int32_t ret = WIO_E5_Driver.Sleep(&lora_radio);
+
+    if (ret == WIO_E5_OK)
+    {
+        ESP_LOGI(TAG, "Wio-E5 in low-power mode (AT+LOWPOWER confirmed).");
+    }
+    else
+    {
+        ESP_LOGW(TAG,
+                 "Wio-E5 did not confirm AT+LOWPOWER (%ld). Last response: '%s'",
+                 (long)ret, lora_radio.last_resp);
+    }
+
+    if (bsp_uart_prepare_deep_sleep() != 0)
+    {
+        ESP_LOGW(TAG, "Could not hold the UART pins for deep sleep.");
+    }
 }
 
 /**
@@ -494,6 +567,9 @@ void vc_application_start(void)
             esp_sleep_wakeup_cause_t wakeup_reason =
                 esp_sleep_get_wakeup_cause();
 
+            esp_reset_reason_t reset_reason =
+                esp_reset_reason();
+
             if (
                 wakeup_reason ==
                 ESP_SLEEP_WAKEUP_GPIO)
@@ -514,12 +590,20 @@ void vc_application_start(void)
                     "Wakeup triggered by "
                     "15-Minute RTC Timer.");
             }
-            else
+            else if (reset_reason == ESP_RST_POWERON)
             {
                 ESP_LOGI(
                     TAG,
                     "Hard Power Cycle / "
                     "Normal Boot Detected.");
+            }
+            else
+            {
+                ESP_LOGW(
+                    TAG,
+                    "Unexpected reset (esp_reset_reason = %d): "
+                    "resuming the duty cycle without operator confirmation.",
+                    (int)reset_reason);
             }
 
             esp_err_t err =
@@ -551,12 +635,18 @@ void vc_application_start(void)
              * operator to explicitly confirm start. A timer wake or a
              * maintenance button wake means the node is already deployed
              * and running its normal duty cycle - gating those too would
-             * break autonomous operation, not just first-install safety. */
+             * break autonomous operation, not just first-install safety.
+             * Fix F3: brown-out, watchdog, panic and the esp_restart() in
+             * STATE_ERROR are NOT power cycles. Before this fix they also
+             * entered the gate and left a deployed node awake forever,
+             * waiting for a button nobody would press. */
             if (
                 wakeup_reason !=
                     ESP_SLEEP_WAKEUP_TIMER &&
                 wakeup_reason !=
-                    ESP_SLEEP_WAKEUP_GPIO)
+                    ESP_SLEEP_WAKEUP_GPIO &&
+                reset_reason ==
+                    ESP_RST_POWERON)
             {
                 current_state = STATE_WAIT_FOR_START;
             }
@@ -679,15 +769,44 @@ void vc_application_start(void)
                     rtc_leaf_history,
                     rtc_history_index);
 
+            /* Irish Rules with the measured leaf wetness. On error the
+             * output carries IR_FLAG_MODEL_ERROR and EBH 0, and the cycle
+             * continues so the sensor data still reach the gateway. */
+            edge_ai_ir_output_t ir_out;
+
+            (void)run_irish_rules_risk(
+                rtc_temp_history,
+                rtc_hum_history,
+                rtc_leaf_history,
+                rtc_history_index,
+                &ir_out);
+
+            /* Edge-ML forecast of the next 24 h. On error the payload
+             * carries 0xFF and FC_FLAG_ERROR; the cycle continues. */
+            edge_ai_fc_output_t fc_out;
+
+            (void)run_blight_forecast(
+                rtc_temp_history,
+                rtc_hum_history,
+                rtc_leaf_history,
+                rtc_history_index,
+                &fc_out,
+                esp_timer_get_time);
+
             ESP_LOGI(
                 TAG,
                 "Model comparison - "
                 "Smith: %d%% | "
                 "Heuristic: %d%% | "
-                "Trained RF: %d%%",
+                "Trained RF: %d%% | "
+                "Irish Rules EBH max/now: %u/%u | "
+                "Forecast 24h: %u%%",
                 smith_score,
                 heuristic_score,
-                ai_score);
+                ai_score,
+                (unsigned)ir_out.ebh_max,
+                (unsigned)ir_out.ebh_current,
+                (unsigned)fc_out.prob_pct);
 
             rtc_history_index =
                 (rtc_history_index + 1) % BUFFER_SIZE;
@@ -704,8 +823,14 @@ void vc_application_start(void)
                 (uint16_t)(current_leaf * 100.0f);
             tx_payload.soil_moisture =
                 (uint16_t)(current_moisture * 100.0f);
-            tx_payload.reserved1 = 0;
-            tx_payload.reserved2 = 0;
+            tx_payload.seq = rtc_tx_seq;
+            tx_payload.ir_ebh =
+                (ir_out.ebh_max > 255u) ? 255u : (uint8_t)ir_out.ebh_max;
+            tx_payload.ir_flags = ir_out.flags;
+            tx_payload.fc_prob = fc_out.prob_pct;
+            tx_payload.fc_flags = fc_out.flags;
+
+            rtc_tx_seq++;
 
             current_state =
                 STATE_TRANSMIT;
@@ -721,12 +846,18 @@ void vc_application_start(void)
 
             ESP_LOGI(
                 TAG,
-                "Broadcasting 14-Byte Payload...");
+                "Broadcasting %u-Byte Payload...",
+                (unsigned)sizeof(LoRaPayload_t));
 
             WIO_E5_Driver.SendHexPayload(
                 &lora_radio,
                 (const uint8_t *)&tx_payload,
                 sizeof(LoRaPayload_t));
+
+            ESP_LOGW(
+                TAG,
+                "Radio Response: %s",
+                lora_radio.last_resp);
 
             BSP_Delay(500);
 
@@ -810,6 +941,8 @@ void vc_application_start(void)
                     pdMS_TO_TICKS(500));
             }
 
+            LoRa_Enter_Low_Power();
+
             Sensor_Power_Off();
             LED_Write(false);
 
@@ -842,6 +975,14 @@ void vc_application_start(void)
             ESP_LOGI(
                 TAG,
                 "Sensor power OFF.");
+
+            /* RAM check for the thesis: smallest free stack seen by this
+             * task since boot (the models run on this task). */
+            ESP_LOGI(
+                TAG,
+                "Main task stack: %u bytes never used (of %u)",
+                (unsigned)uxTaskGetStackHighWaterMark(NULL),
+                (unsigned)CONFIG_ESP_MAIN_TASK_STACK_SIZE);
 
             ESP_LOGI(
                 TAG,

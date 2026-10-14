@@ -11,6 +11,7 @@
 #include "leaf_wetness.h"
 #include "esp_adc/adc_oneshot.h"
 #include "driver/uart.h"
+#include "driver/gpio.h"
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -54,11 +55,37 @@ void BSP_Delay(uint32_t ms)
     vTaskDelay(pdMS_TO_TICKS(ms));
 }
 
+/**
+ * @brief  Millisecond tick for driver timeouts (resolution = 1 FreeRTOS tick,
+ *         10 ms at CONFIG_FREERTOS_HZ=100). Wraps after ~49 days.
+ */
+uint32_t BSP_GetTick(void)
+{
+    return (uint32_t)pdTICKS_TO_MS(xTaskGetTickCount());
+}
+
 /* ==================================
    LORA UART FUNCTIONS
    ================================== */
+/**
+ * @brief  Initializes UART1 for the Wio-E5 (9600 8N1, TX GPIO6, RX GPIO5).
+ *
+ * The UART pins may still be latched by bsp_uart_prepare_deep_sleep() from
+ * the previous cycle (the pad hold survives the deep-sleep wake-up), so the
+ * hold is released first. TX is driven HIGH (UART idle) before the release
+ * so the Wio-E5 never sees a LOW glitch that it could read as a start bit.
+ * RX gets the internal pull-up: in AT+LOWPOWER the Wio-E5 tri-states its TX.
+ *
+ * @return 0 on success, -1 on any driver error.
+ */
 int32_t bsp_uart_init(void)
 {
+    /* 1. Release the deep-sleep hold without a glitch on TX */
+    gpio_set_level(UART_TX_PIN, 1);
+    gpio_set_direction(UART_TX_PIN, GPIO_MODE_OUTPUT);
+    gpio_hold_dis(UART_TX_PIN);
+    gpio_hold_dis(UART_RX_PIN);
+
     uart_config_t uart_config = {
         .baud_rate = UART_BAUD_RATE,
         .data_bits = UART_DATA_8_BITS,
@@ -67,16 +94,79 @@ int32_t bsp_uart_init(void)
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_DEFAULT,
     };
-    uart_driver_install(UART_PORT_NUM, 256, 0, 0, NULL, 0);
-    uart_param_config(UART_PORT_NUM, &uart_config);
-    uart_set_pin(UART_PORT_NUM, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+
+    /* 2. Driver install (skip if a previous call already installed it) */
+    if (!uart_is_driver_installed(UART_PORT_NUM))
+    {
+        if (uart_driver_install(UART_PORT_NUM, 256, 0, 0, NULL, 0) != ESP_OK)
+            return -1;
+    }
+    if (uart_param_config(UART_PORT_NUM, &uart_config) != ESP_OK)
+        return -1;
+    if (uart_set_pin(UART_PORT_NUM, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) != ESP_OK)
+        return -1;
+
+    /* 3. Keep RX defined while the Wio-E5 output is tri-stated */
+    gpio_pullup_en(UART_RX_PIN);
+    return 0;
+}
+
+/**
+ * @brief  Parks the Wio-E5 UART pins for ESP32 deep sleep.
+ *
+ * Without this, GPIO6 (TX -> Wio-E5 RX) floats during deep sleep; noise on
+ * that line can wake the Wio-E5 out of AT+LOWPOWER. The UART driver is
+ * removed, TX is held HIGH (UART idle) and RX is held as input with pull-up.
+ * GPIO6 is a digital pad on the ESP32-C3, so its hold needs
+ * gpio_deep_sleep_hold_en() as well. Side effect (ESP-IDF behaviour): with
+ * the deep-sleep hold enabled, all other non-held digital pads (GPIO6..21)
+ * are isolated during deep sleep, which lowers the sleep current; the
+ * sensor-switch gate GPIO7 stays OFF through its external 100k pull-up.
+ *
+ * @return 0 on success, -1 if a hold could not be set.
+ */
+int32_t bsp_uart_prepare_deep_sleep(void)
+{
+    if (uart_is_driver_installed(UART_PORT_NUM))
+    {
+        uart_wait_tx_done(UART_PORT_NUM, pdMS_TO_TICKS(100));
+        uart_driver_delete(UART_PORT_NUM);
+    }
+
+    gpio_config_t tx_conf = {
+        .pin_bit_mask = (1ULL << UART_TX_PIN),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_set_level(UART_TX_PIN, 1);
+    if (gpio_config(&tx_conf) != ESP_OK)
+        return -1;
+    gpio_set_level(UART_TX_PIN, 1);
+
+    gpio_config_t rx_conf = {
+        .pin_bit_mask = (1ULL << UART_RX_PIN),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    if (gpio_config(&rx_conf) != ESP_OK)
+        return -1;
+
+    if (gpio_hold_en(UART_TX_PIN) != ESP_OK)
+        return -1;
+    if (gpio_hold_en(UART_RX_PIN) != ESP_OK)
+        return -1;
+    gpio_deep_sleep_hold_en();
     return 0;
 }
 
 int32_t bsp_uart_write(const uint8_t *data, uint16_t length)
 {
-    uart_write_bytes(UART_PORT_NUM, (const char *)data, length);
-    return 0;
+    int written = uart_write_bytes(UART_PORT_NUM, (const char *)data, length);
+    return (written < 0) ? -1 : 0;
 }
 
 int32_t bsp_uart_read(uint8_t *buffer, uint16_t max_length)
