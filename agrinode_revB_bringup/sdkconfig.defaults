@@ -1,0 +1,13 @@
+# Beetle ESP32-C3 (DFR0868) on the Agrinode rev B PCB
+CONFIG_IDF_TARGET="esp32c3"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# Console on the Beetle's USB-C port (USB-Serial-JTAG). UART0 would toggle
+# GPIO20/21, which are the I2C pins of the SHT31 on this PCB.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# 1 ms tick for the Wio-E5 timeouts and the ready-time measurement
+CONFIG_FREERTOS_HZ=1000
+
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=6144
