@@ -33,6 +33,8 @@ static int32_t WioE5_StartReceive(WioE5_Object_t *pObj);
 static int32_t WioE5_Receive(WioE5_Object_t *pObj, uint8_t *Buffer, uint16_t MaxLength);
 static int32_t WioE5_Sleep(WioE5_Object_t *pObj);
 static int32_t WioE5_Wakeup(WioE5_Object_t *pObj);
+static int32_t WioE5_WaitReady(WioE5_Object_t *pObj, uint32_t timeout_ms, uint32_t poll_ms,
+                               uint32_t *pElapsedMs, uint32_t *pPolls);
 
 /* Expose API */
 WioE5_Drv_t WIO_E5_Driver = {
@@ -43,7 +45,8 @@ WioE5_Drv_t WIO_E5_Driver = {
     .StartReceive = WioE5_StartReceive,
     .Receive = WioE5_Receive,
     .Sleep = WioE5_Sleep,
-    .Wakeup = WioE5_Wakeup};
+    .Wakeup = WioE5_Wakeup,
+    .WaitReady = WioE5_WaitReady};
 
 /* ==================== internal helpers ==================== */
 
@@ -216,16 +219,21 @@ static int32_t WioE5_ConfigP2P(WioE5_Object_t *pObj)
     if (pObj == NULL || !pObj->is_initialized)
         return WIO_E5_ERROR;
 
+    /* Rev B: the module is freshly powered every cycle and starts in
+       LWABP mode, so both answers are now checked (was 2 x fixed 200 ms). */
+    WioE5_Flush(pObj);
     const char *cmd_mode = "AT+MODE=TEST\r\n";
-    (void)WioE5_WriteStr(pObj, cmd_mode);
-    pObj->IO.Delay(200);
+    if (WioE5_WriteStr(pObj, cmd_mode) < 0)
+        return WIO_E5_ERROR;
+    int32_t ret = WioE5_WaitFor(pObj, "+MODE: TEST", WIO_E5_CMD_TIMEOUT_MS);
+    if (ret != WIO_E5_OK)
+        return ret;
 
     /* Configuration for EU868 Band using SF10 for extended range */
     const char *cmd_cfg = "AT+TEST=RFCFG,868.1,SF10,125,12,15,14,ON,OFF,OFF\r\n";
-    (void)WioE5_WriteStr(pObj, cmd_cfg);
-    pObj->IO.Delay(200);
-
-    return WIO_E5_OK;
+    if (WioE5_WriteStr(pObj, cmd_cfg) < 0)
+        return WIO_E5_ERROR;
+    return WioE5_WaitFor(pObj, "+TEST: RFCFG", WIO_E5_CMD_TIMEOUT_MS);
 }
 
 static int32_t WioE5_SendHexPayload(WioE5_Object_t *pObj, const uint8_t *Payload, uint8_t Length)
@@ -245,24 +253,18 @@ static int32_t WioE5_SendHexPayload(WioE5_Object_t *pObj, const uint8_t *Payload
 
     snprintf(tx_buffer + offset, (size_t)(CMD_BUFFER_SIZE - offset), "\"\r\n");
 
+    /* Drop the answers of the configuration commands first, so last_resp
+       only holds the transmit answer. */
+    WioE5_Flush(pObj);
+
     /* Fire the transmit command */
-    (void)WioE5_WriteStr(pObj, tx_buffer);
+    if (WioE5_WriteStr(pObj, tx_buffer) < 0)
+        return WIO_E5_ERROR;
 
-    /* Wait for the RF pulse to finish (unchanged fixed wait) */
-    pObj->IO.Delay(2000);
-
-    /* Keep the module's answer for the caller to log (was ESP_LOGW here).
-       Up to 3 reads, so "+TEST: TXLRPKT ..." and "+TEST: TX DONE" both fit. */
-    pObj->last_resp[0] = '\0';
-    for (uint8_t i = 0; i < 3U; i++)
-    {
-        int32_t n = pObj->IO.Read(rx_chunk, sizeof(rx_chunk));
-        if (n <= 0)
-            break;
-        WioE5_AppendResp(pObj, rx_chunk, n);
-    }
-
-    return WIO_E5_OK;
+    /* Wait for the end of the RF transmission (was a fixed 2 s). The text
+       ("+TEST: TXLRPKT ..." and "+TEST: TX DONE") stays in last_resp for
+       the caller to log. */
+    return WioE5_WaitFor(pObj, "TX DONE", WIO_E5_TX_TIMEOUT_MS);
 }
 
 static int32_t WioE5_StartReceive(WioE5_Object_t *pObj)
@@ -347,5 +349,66 @@ static int32_t WioE5_Wakeup(WioE5_Object_t *pObj)
             return ret;
         }
     }
+    return ret;
+}
+
+/**
+ * @brief  Waits until a freshly powered module answers "AT" (PCB rev B:
+ *         the Wio-E5 supply is switched by GPIO8, so it boots every cycle).
+ *         Sends "AT" every @p poll_ms and waits up to @p poll_ms for
+ *         "+AT: OK" after each one, until @p timeout_ms is used up.
+ *         Before the module has booted it ignores the bytes, so the first
+ *         answer marks its boot time to about +/- poll_ms.
+ * @param  pObj        initialized module object
+ * @param  timeout_ms  total time allowed (e.g. 3000)
+ * @param  poll_ms     interval between "AT" attempts (e.g. 100, min 10)
+ * @param  pElapsedMs  time until "+AT: OK" (or the time spent), may be NULL
+ * @param  pPolls      number of "AT" lines sent, may be NULL
+ * @return WIO_E5_OK when the module answered, WIO_E5_TIMEOUT if not,
+ *         WIO_E5_ERROR on a bad argument or bus error.
+ */
+static int32_t WioE5_WaitReady(WioE5_Object_t *pObj, uint32_t timeout_ms, uint32_t poll_ms,
+                               uint32_t *pElapsedMs, uint32_t *pPolls)
+{
+    if (pObj == NULL || !pObj->is_initialized || timeout_ms == 0U)
+        return WIO_E5_ERROR;
+    if (poll_ms < 10U)
+        poll_ms = 10U;
+
+    uint32_t start = WioE5_Now(pObj);
+    uint32_t spent = 0U;      /* used when there is no tick source */
+    uint32_t polls = 0U;
+    int32_t ret = WIO_E5_TIMEOUT;
+
+    while (ret == WIO_E5_TIMEOUT)
+    {
+        if (WioE5_WriteStr(pObj, "AT\r\n") < 0)
+        {
+            ret = WIO_E5_ERROR;
+            break;
+        }
+        polls++;
+        ret = WioE5_WaitFor(pObj, "+AT: OK", poll_ms);
+        if (ret == WIO_E5_TIMEOUT)
+        {
+            uint32_t elapsed;
+            if (pObj->IO.GetTick != NULL)
+            {
+                elapsed = WioE5_Now(pObj) - start;
+            }
+            else
+            {
+                spent += poll_ms;
+                elapsed = spent;
+            }
+            if (elapsed >= timeout_ms)
+                break;
+        }
+    }
+
+    if (pElapsedMs != NULL)
+        *pElapsedMs = (pObj->IO.GetTick != NULL) ? (WioE5_Now(pObj) - start) : spent;
+    if (pPolls != NULL)
+        *pPolls = polls;
     return ret;
 }

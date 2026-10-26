@@ -1,0 +1,12 @@
+# Agrinode node, Beetle ESP32-C3 on PCB rev B.
+# Used only when sdkconfig is missing (e.g. after "idf.py fullclean" + delete).
+CONFIG_IDF_TARGET="esp32c3"
+
+# Console on the Beetle's USB-C port (USB-Serial-JTAG) only. A UART0 console
+# drives GPIO20/21, which are the SHT31 I2C pins on rev B (back-feed H4).
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+CONFIG_FREERTOS_HZ=100
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=3584
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y

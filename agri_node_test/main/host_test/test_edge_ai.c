@@ -177,13 +177,23 @@ static void test_leaf_threshold_units(void)
     CHECK_EQ(run_trained_random_forest_inference(rtc_temp, rtc_hum, rtc_leaf, idx), 50);
     CHECK_EQ(run_heuristic_ai_risk(rtc_temp, rtc_hum, rtc_leaf, idx), 5);  /* (0 + 10 + 5) / 3 */
 
-    /* threshold edge: 7.5 is wet, 7.49 is not (heuristic SWD term) */
+    /* threshold edge: just below EDGE_AI_LEAF_WET_INDEX_THRESHOLD is not wet
+       (heuristic SWD term); the macro is used so the test follows the
+       calibrated threshold */
     node_reset();
     for (int s = 0; s < BUFFER_SIZE; s++)
     {
-        idx = node_write(15.0f, 95.0f, 7.49f);
+        idx = node_write(15.0f, 95.0f, EDGE_AI_LEAF_WET_INDEX_THRESHOLD - 0.01f);
     }
     CHECK_EQ(run_heuristic_ai_risk(rtc_temp, rtc_hum, rtc_leaf, idx), 5);  /* (0 + 10 + 5) / 3 */
+
+    /* exactly at the threshold counts as wet: same result as index 12 */
+    node_reset();
+    for (int s = 0; s < BUFFER_SIZE; s++)
+    {
+        idx = node_write(15.0f, 95.0f, EDGE_AI_LEAF_WET_INDEX_THRESHOLD);
+    }
+    CHECK_EQ(run_heuristic_ai_risk(rtc_temp, rtc_hum, rtc_leaf, idx), 61);
 }
 
 /** Irish Rules wrapper on a humid, partly wet night stored across the ring wrap. */

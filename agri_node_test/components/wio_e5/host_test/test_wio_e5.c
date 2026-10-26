@@ -3,7 +3,8 @@
  * @brief   Host (PC) tests for the Wio-E5 driver low-power functions.
  *
  * A simulated Wio-E5 sits behind the WioE5_IO_t function pointers. It parses
- * AT lines, answers like the real AT firmware, models AT+LOWPOWER sleep and
+ * AT lines, answers like the real AT firmware, models AT+LOWPOWER sleep,
+ * the rev B power-on boot (bytes ignored until booted) and
  * wake-up, and keeps a fake millisecond clock (Read() without data costs
  * 100 ms, like bsp_uart_read()).
  *
@@ -20,7 +21,9 @@
 
 /* ==================== simulated module ==================== */
 
-typedef enum { SIM_AWAKE, SIM_ASLEEP, SIM_DEAD } sim_state_t;
+/* SIM_BOOTING: power just switched on (rev B GPIO8); every byte is ignored
+   until now_ms reaches boot_until_ms, then the module is SIM_AWAKE. */
+typedef enum { SIM_AWAKE, SIM_ASLEEP, SIM_DEAD, SIM_BOOTING } sim_state_t;
 
 typedef enum {
     WAKE_SILENT,      /* wake bytes wake it, nothing printed */
@@ -39,6 +42,9 @@ static struct {
     int          read_error;     /* force Read() to return -1 */
     char         last_tx_cmd[256];
     unsigned     n_at;           /* count of "AT" lines seen */
+    uint32_t     boot_until_ms;  /* SIM_BOOTING: time the firmware is up */
+    int          no_tx_done;     /* never print "+TEST: TX DONE" */
+    int          mode_error;     /* answer AT+MODE=TEST with an error */
 } sim;
 
 static void sim_reset(sim_state_t st, wake_style_t ws)
@@ -46,6 +52,13 @@ static void sim_reset(sim_state_t st, wake_style_t ws)
     memset(&sim, 0, sizeof(sim));
     sim.state = st;
     sim.wake_style = ws;
+}
+
+/* Moves a booting module to AWAKE once its boot time has passed. */
+static void sim_boot_check(void)
+{
+    if (sim.state == SIM_BOOTING && sim.now_ms >= sim.boot_until_ms)
+        sim.state = SIM_AWAKE;
 }
 
 static void sim_emit(const char *s)
@@ -80,7 +93,7 @@ static void sim_handle_line(const char *l)
     }
     else if (strcmp(l, "AT+MODE=TEST") == 0)
     {
-        sim_emit("+MODE: TEST\r\n");
+        sim_emit(sim.mode_error ? "+MODE: ERROR(-1)\r\n" : "+MODE: TEST\r\n");
     }
     else if (strncmp(l, "AT+TEST=RFCFG", 13) == 0)
     {
@@ -91,7 +104,7 @@ static void sim_handle_line(const char *l)
         snprintf(sim.last_tx_cmd, sizeof(sim.last_tx_cmd), "%s", l);
         sim_emit("+TEST: TXLRPKT ");
         sim_emit(l + 16);
-        sim_emit("\r\n+TEST: TX DONE\r\n");
+        sim_emit(sim.no_tx_done ? "\r\n" : "\r\n+TEST: TX DONE\r\n");
     }
     else
     {
@@ -102,9 +115,10 @@ static void sim_handle_line(const char *l)
 static int32_t io_write(const uint8_t *p, uint16_t n)
 {
     sim.now_ms += (uint32_t)(n / 1U + 1U); /* ~1 ms per byte at 9600 baud */
+    sim_boot_check();
     for (uint16_t i = 0; i < n; i++)
     {
-        if (sim.state == SIM_DEAD)
+        if (sim.state == SIM_DEAD || sim.state == SIM_BOOTING)
             continue;
         if (sim.state == SIM_ASLEEP)
         {
@@ -137,6 +151,7 @@ static int32_t io_read(uint8_t *buf, uint16_t len)
 {
     if (sim.read_error)
         return -1;
+    sim_boot_check();
     if (sim.out_len == 0U)
     {
         sim.now_ms += 100U; /* bsp_uart_read() timeout */
@@ -297,6 +312,91 @@ static void test_spurious_wake_before_cycle(void)
     CHECK(WIO_E5_Driver.Wakeup(&obj) == WIO_E5_OK, "wake when already awake");
 }
 
+/* Rev B power-on: module boots in boot_ms, WaitReady must find it. */
+static void test_wait_ready_boot(uint32_t boot_ms, int with_tick)
+{
+    char msg[128];
+    sim_reset(SIM_BOOTING, WAKE_SILENT);
+    sim.boot_until_ms = boot_ms;
+    setup(with_tick);
+    uint32_t el = 0, polls = 0, t0 = sim.now_ms;
+    int32_t r = WIO_E5_Driver.WaitReady(&obj, 3000U, 100U, &el, &polls);
+    snprintf(msg, sizeof msg, "boot %u ms (tick %d): ready", (unsigned)boot_ms, with_tick);
+    CHECK(r == WIO_E5_OK, msg);
+    uint32_t dt = sim.now_ms - t0;
+    snprintf(msg, sizeof msg, "boot %u ms: found within 250 ms of boot (took %u)",
+             (unsigned)boot_ms, (unsigned)dt);
+    CHECK(dt >= boot_ms && dt <= boot_ms + 250U, msg);
+    if (with_tick)
+        CHECK(el == dt, "elapsed reported");
+    CHECK(polls >= 1U && polls <= boot_ms / 100U + 2U, "poll count plausible");
+    CHECK(sim.n_at == 1U, "exactly one AT answered");
+    /* then the normal cycle works on the fresh module */
+    CHECK(WIO_E5_Driver.ConfigP2P(&obj) == WIO_E5_OK, "config after boot");
+    uint8_t p[16] = {0};
+    CHECK(WIO_E5_Driver.SendHexPayload(&obj, p, 16) == WIO_E5_OK, "tx after boot");
+    CHECK(strstr(obj.last_resp, "TX DONE") != NULL, "TX DONE in last_resp");
+    CHECK(strstr(obj.last_resp, "RFCFG") == NULL, "config answers flushed before tx");
+}
+
+static void test_wait_ready_fail(void)
+{
+    /* module never answers (no power / wrong UART pins) */
+    for (int tick = 0; tick <= 1; tick++)
+    {
+        sim_reset(SIM_DEAD, WAKE_SILENT);
+        setup(tick);
+        uint32_t el = 0, polls = 0, t0 = sim.now_ms;
+        CHECK(WIO_E5_Driver.WaitReady(&obj, 3000U, 100U, &el, &polls) == WIO_E5_TIMEOUT,
+              "dead: WaitReady timeout");
+        uint32_t dt = sim.now_ms - t0;
+        CHECK(dt >= 3000U && dt < 3500U, "dead: WaitReady bounded by timeout");
+        CHECK(el >= 3000U, "dead: elapsed >= timeout");
+        CHECK(polls >= 10U, "dead: kept polling");
+    }
+    /* boots after the timeout -> still TIMEOUT, bounded */
+    sim_reset(SIM_BOOTING, WAKE_SILENT);
+    sim.boot_until_ms = 5000U;
+    setup(1);
+    CHECK(WIO_E5_Driver.WaitReady(&obj, 3000U, 100U, NULL, NULL) == WIO_E5_TIMEOUT,
+          "late boot: timeout, NULL outputs OK");
+    /* bad arguments */
+    WioE5_Object_t o;
+    memset(&o, 0, sizeof o);
+    CHECK(WIO_E5_Driver.WaitReady(&o, 3000U, 100U, NULL, NULL) == WIO_E5_ERROR, "not initialised");
+    CHECK(WIO_E5_Driver.WaitReady(NULL, 3000U, 100U, NULL, NULL) == WIO_E5_ERROR, "NULL obj");
+    sim_reset(SIM_AWAKE, WAKE_SILENT);
+    setup(1);
+    CHECK(WIO_E5_Driver.WaitReady(&obj, 0U, 100U, NULL, NULL) == WIO_E5_ERROR, "timeout 0");
+    /* poll 0 is raised to 10 ms and still works */
+    CHECK(WIO_E5_Driver.WaitReady(&obj, 1000U, 0U, NULL, NULL) == WIO_E5_OK, "poll 0 clamped");
+    sim.read_error = 1;
+    CHECK(WIO_E5_Driver.WaitReady(&obj, 1000U, 100U, NULL, NULL) == WIO_E5_ERROR, "read error");
+}
+
+static void test_config_and_tx_errors(void)
+{
+    sim_reset(SIM_AWAKE, WAKE_SILENT);
+    setup(1);
+    sim.mode_error = 1;
+    CHECK(WIO_E5_Driver.ConfigP2P(&obj) == WIO_E5_TIMEOUT, "mode error -> TIMEOUT");
+    sim.mode_error = 0;
+    sim_reset(SIM_DEAD, WAKE_SILENT);
+    setup(1);
+    uint32_t t0 = sim.now_ms;
+    CHECK(WIO_E5_Driver.ConfigP2P(&obj) == WIO_E5_TIMEOUT, "dead: config timeout");
+    CHECK(sim.now_ms - t0 < 2000U, "dead: config bounded (stops after MODE)");
+    sim_reset(SIM_AWAKE, WAKE_SILENT);
+    setup(1);
+    sim.no_tx_done = 1;
+    uint8_t p[16] = {0};
+    t0 = sim.now_ms;
+    CHECK(WIO_E5_Driver.SendHexPayload(&obj, p, 16) == WIO_E5_TIMEOUT, "no TX DONE -> TIMEOUT");
+    CHECK(sim.now_ms - t0 >= WIO_E5_TX_TIMEOUT_MS && sim.now_ms - t0 < WIO_E5_TX_TIMEOUT_MS + 1000U,
+          "no TX DONE: bounded");
+    CHECK(strstr(obj.last_resp, "TXLRPKT") != NULL, "partial answer kept for logging");
+}
+
 int main(void)
 {
     test_register_validation();
@@ -309,6 +409,12 @@ int main(void)
     test_noise_overflow();
     test_read_error();
     test_spurious_wake_before_cycle();
+    test_wait_ready_boot(1300U, 1);
+    test_wait_ready_boot(1450U, 1);
+    test_wait_ready_boot(0U, 1);
+    test_wait_ready_boot(1300U, 0);
+    test_wait_ready_fail();
+    test_config_and_tx_errors();
 
     printf("%d checks passed, %d failed\n", g_pass, g_fail);
     return g_fail ? EXIT_FAILURE : EXIT_SUCCESS;

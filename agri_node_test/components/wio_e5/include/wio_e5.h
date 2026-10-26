@@ -13,6 +13,15 @@
  *               then "AT" until the module answers "+AT: OK".
  *   - The text the module sent back is kept in pObj->last_resp so the
  *     application can log it (the driver itself no longer logs).
+ *
+ * 2026-10-26 (PCB rev B, Wio-E5 power switched by GPIO8):
+ *   - WaitReady(): after power-on, sends "AT" every poll_ms until the module
+ *     answers "+AT: OK" (boot measured 1.3-1.45 s) or timeout_ms elapses.
+ *     Reports the time and the number of polls.
+ *   - SendHexPayload() now waits for "+TEST: TX DONE" (max WIO_E5_TX_TIMEOUT_MS)
+ *     instead of a fixed 2 s, and returns WIO_E5_TIMEOUT if it never came.
+ *   - ConfigP2P() checks "+MODE: TEST" and "+TEST: RFCFG" (max
+ *     WIO_E5_CMD_TIMEOUT_MS each) instead of two fixed 200 ms delays.
  ******************************************************************************
  */
 
@@ -34,6 +43,8 @@
 #define WIO_E5_WAKE_ATTEMPTS        (3U)
 #define WIO_E5_WAKE_SETTLE_MS       (10U)   /* gap between wake bytes and "AT" */
 #define WIO_E5_BUS_READ_TIMEOUT_MS  (100U)  /* Read() timeout assumed when IO.GetTick is NULL */
+#define WIO_E5_TX_TIMEOUT_MS        (3000U) /* wait for "+TEST: TX DONE" (airtime SF10 ~0.32 s) */
+#define WIO_E5_CMD_TIMEOUT_MS       (1000U) /* answer to AT+MODE / AT+TEST=RFCFG */
 
 /* --- 1. Bus IO Structure (UART Abstraction) --- */
 typedef struct {
@@ -67,6 +78,10 @@ typedef struct {
     int32_t (*Receive)(WioE5_Object_t *pObj, uint8_t *Buffer, uint16_t MaxLength);
     int32_t (*Sleep)(WioE5_Object_t *pObj);   /* AT+LOWPOWER */
     int32_t (*Wakeup)(WioE5_Object_t *pObj);  /* 0xFF x4 + AT handshake */
+    /* After power-on: "AT" every poll_ms until "+AT: OK" or timeout_ms.
+       pElapsedMs / pPolls may be NULL. */
+    int32_t (*WaitReady)(WioE5_Object_t *pObj, uint32_t timeout_ms, uint32_t poll_ms,
+                         uint32_t *pElapsedMs, uint32_t *pPolls);
 } WioE5_Drv_t;
 
 /* --- Exported API --- */
