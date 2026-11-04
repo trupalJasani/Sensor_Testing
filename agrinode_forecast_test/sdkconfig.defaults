@@ -1,0 +1,17 @@
+# Forecast test: same CPU / RTOS / compiler settings as agri_node_test.
+CONFIG_IDF_TARGET="esp32c3"
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y
+CONFIG_FREERTOS_HZ=100
+CONFIG_COMPILER_OPTIMIZATION_DEBUG=y
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_BROWNOUT_DET=y
+CONFIG_ESP_BROWNOUT_DET_LVL_SEL_7=y
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+# Test only: the energy loop keeps the CPU busy for 30 s without yielding,
+# which the task watchdog would report. The node keeps its watchdog.
+CONFIG_ESP_TASK_WDT_EN=n
+# More stack than the node (3584 B): printf of doubles. The free stack is
+# printed in FT,SUMMARY.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=6144
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y

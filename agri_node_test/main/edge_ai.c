@@ -569,3 +569,33 @@ int32_t run_blight_forecast(float *temp_history, float *hum_history, float *leaf
              (long)out->feature_us, (long)out->model_us, bf_model_id());
     return 0;
 }
+
+/* ==========================================================================
+   9. FINAL RISK LEVEL (payload byte 1, since 2026-11-04)
+   ==========================================================================
+   Combines the three models into one rule-based level for the gateway and
+   the dashboard. Replaces the random-forest surrogate of the Smith rule in
+   byte 1 (run_trained_random_forest_inference() is no longer called).
+     HIGH  (100): Irish Rules EBH (max of the last 48 h) >= 12, or a full
+                  Smith Period - a risk period has happened.
+     EARLY  (50): forecast warning bit - a Smith day is likely in the
+                  next 24 h.
+     LOW     (0): neither.
+   A model that reports an error (IR_FLAG_MODEL_ERROR / FC_FLAG_ERROR) is
+   ignored, so a failed forecast can never raise or hide a rule result.
+   This is a decision rule, not a probability.
+   ========================================================================== */
+uint8_t compute_final_risk(uint8_t smith_score, const edge_ai_ir_output_t *ir,
+                           const edge_ai_fc_output_t *fc)
+{
+    const bool ir_ok = (ir != NULL) && ((ir->flags & IR_FLAG_MODEL_ERROR) == 0u);
+    const bool fc_ok = (fc != NULL) && ((fc->flags & FC_FLAG_ERROR) == 0u);
+
+    if ((ir_ok && ir->ebh_max >= EDGE_AI_IR_EBH_WARNING) || smith_score >= 100u) {
+        return FINAL_RISK_HIGH;
+    }
+    if (fc_ok && (fc->flags & FC_FLAG_WARNING) != 0u) {
+        return FINAL_RISK_EARLY_WARNING;
+    }
+    return FINAL_RISK_LOW;
+}

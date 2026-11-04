@@ -371,17 +371,24 @@ static WioE5_Object_t lora_radio;
 
 static EventGroupHandle_t wifi_event_group = NULL;
 
-/* ==================== 16-BYTE LORA PAYLOAD ==================== */
+/* ==================== 18-BYTE LORA PAYLOAD ==================== */
 
 /* Must match LoRaPayload_t in agri_node_test/main/vc_application.c.
  * Little-endian, packed. Bytes 10-13 were reserved1/reserved2 (always 0
  * in older node firmware, which decodes here as seq 0 / EBH 0 / flags 0).
  * Bytes 14-15 (forecast) were added on 2026-10-14; 14-byte packets from
- * older node firmware are still accepted and decode as "no forecast". */
+ * older node firmware are still accepted and decode as "no forecast".
+ * Bytes 16-17 (battery mV) were added on 2026-10-26; 14- and 16-byte
+ * packets decode as "battery not measured" (0).
+ * Since 2026-11-04 byte 1 is the final risk level computed ON THE NODE
+ * (compute_final_risk in agri_node_test/main/edge_ai.c). The gateway only
+ * forwards it; the old meta-classifier (Smith + RF) was removed. In packets
+ * from older node firmware, byte 1 still holds the RF surrogate - flash
+ * node and gateway together. */
 typedef struct __attribute__((packed))
 {
     uint8_t smith_risk;     /* byte 0      Smith Period 0/50/100 */
-    uint8_t rf_risk;        /* byte 1      trained RF 0/50/100 */
+    uint8_t final_risk;     /* byte 1      final risk level from the node: 0 low, 50 early warning, 100 high */
     int16_t temperature;    /* bytes 2-3   C x 100, SIGNED (fix F2: was uint16_t) */
     uint16_t humidity;      /* bytes 4-5   %RH x 100 */
     uint16_t leaf_wetness;  /* bytes 6-7   Davis index (0..15) x 100 */
@@ -391,12 +398,18 @@ typedef struct __attribute__((packed))
     uint8_t ir_flags;       /* byte 13     Irish Rules status bits (IR_FLAG_*) */
     uint8_t fc_prob;        /* byte 14     forecast: P(next 24 h is a Smith day) x 100, 0xFF = n/a */
     uint8_t fc_flags;       /* byte 15     forecast status bits + model version (FC_FLAG_*) */
+    uint16_t battery_mv;    /* bytes 16-17 node battery in mV at rest, 0 = not measured */
 } LoRaPayload_t;
 
-_Static_assert(sizeof(LoRaPayload_t) == 16, "LoRa payload must be 16 bytes");
+_Static_assert(sizeof(LoRaPayload_t) == 18, "LoRa payload must be 18 bytes");
 
 #define LORA_PAYLOAD_SIZE sizeof(LoRaPayload_t)
 #define LORA_PAYLOAD_SIZE_LEGACY 14u   /* node firmware before 2026-10-14 */
+#define LORA_PAYLOAD_SIZE_V16    16u   /* node firmware 2026-10-14 .. 2026-10-25 */
+
+/* Node battery thresholds - same values as agri_node_test battery_monitor.h */
+#define NODE_BATTERY_LOW_MV      3500u
+#define NODE_BATTERY_CRITICAL_MV 3300u
 
 /* Irish Rules status bits - identical copy of agri_node_test/main/edge_ai.h */
 #define IR_FLAG_INFECTION_ACTIVE    (1u << 0)
@@ -416,9 +429,15 @@ _Static_assert(sizeof(LoRaPayload_t) == 16, "LoRa payload must be 16 bytes");
 
 /* Irish Rules decision threshold in effective blight hours (EBH).
  * 12 = Met Eireann operational practice. Cucak et al. 2019 propose
- * 4-11 EBH, set during the season from local outbreak reports. It lives
- * here, not on the node, so it can be changed without reflashing the node. */
+ * 4-11 EBH. Since 2026-11-04 the decision is made on the node
+ * (EDGE_AI_IR_EBH_WARNING in agri_node_test/main/edge_ai.h); this copy is
+ * only used for the serial log - keep both values identical. */
 #define IR_EBH_WARNING_THRESHOLD 12
+
+/* Final risk levels in payload byte 1 - identical copy of edge_ai.h. */
+#define FINAL_RISK_LOW           0u
+#define FINAL_RISK_EARLY_WARNING 50u
+#define FINAL_RISK_HIGH          100u
 
 /* Set to 1 only after creating a V7 datastream (integer, 0-255) in the
  * Blynk template; until then EBH is logged on serial only. */
@@ -428,39 +447,30 @@ _Static_assert(sizeof(LoRaPayload_t) == 16, "LoRa payload must be 16 bytes");
  * Blynk template; until then the forecast is logged on serial only. */
 #define BLYNK_PUSH_FORECAST 0
 
-/* ==================== META CLASSIFIER ==================== */
+/* Set to 1 only after creating a V9 datastream (double, 0-5 V) in the
+ * Blynk template; until then the battery voltage is logged on serial only. */
+#define BLYNK_PUSH_BATTERY 0
 
-static uint8_t execute_meta_classifier(const LoRaPayload_t *p)
+/* ==================== FINAL RISK (from the node) ==================== */
+
+/**
+ * @brief Text for the final risk level that the node sends in byte 1.
+ *        The level is decided on the node; the gateway only reports and
+ *        forwards it. It is a rule-based level, not a probability.
+ */
+static const char *final_risk_text(uint8_t level)
 {
-    uint8_t final_risk;
-    float leaf_wetness = p->leaf_wetness / 100.0f;
-    ESP_LOGI("META_AI", "Running Fog Ensemble Validation...");
-    if (p->smith_risk > 80 && p->rf_risk > 80)
+    switch (level)
     {
-        final_risk = (p->smith_risk > p->rf_risk)
-                         ? p->smith_risk
-                         : p->rf_risk;
-        ESP_LOGW("META_AI", "Models Agree: CRITICAL BLIGHT RISK DETECTED!");
+    case FINAL_RISK_HIGH:
+        return "HIGH - risk period has happened";
+    case FINAL_RISK_EARLY_WARNING:
+        return "EARLY WARNING - risk expected in the next 24 h";
+    case FINAL_RISK_LOW:
+        return "low";
+    default:
+        return "unknown value (old node firmware?)";
     }
-    else if (p->rf_risk > 70 && p->smith_risk <= 50)
-    {
-        if (leaf_wetness >= LEAF_WETNESS_HIGH_THRESHOLD)
-        {
-            final_risk = p->rf_risk;
-            ESP_LOGW("META_AI", "Conflict Resolved: High leaf wetness validates RF AI.");
-        }
-        else
-        {
-            final_risk = 40;
-            ESP_LOGI("META_AI", "Conflict Resolved: Dry leaf. RF prediction downgraded.");
-        }
-    }
-    else
-    {
-        final_risk = (p->smith_risk + p->rf_risk) / 2;
-        ESP_LOGI("META_AI", "Nominal conditions. Averaging model scores.");
-    }
-    return final_risk;
 }
 
 /* ==================== WIFI ==================== */
@@ -568,7 +578,7 @@ static void Wifi_Init(void)
 
 /* ==================== BLYNK ==================== */
 
-static void Blynk_Update(const LoRaPayload_t *p, uint8_t final_risk)
+static void Blynk_Update(const LoRaPayload_t *p)
 {
     char url[350];
     float temperature = p->temperature / 100.0f;
@@ -577,15 +587,16 @@ static void Blynk_Update(const LoRaPayload_t *p, uint8_t final_risk)
     float soil_moisture = p->soil_moisture / 100.0f;
     int url_len = snprintf(url, sizeof(url),
              "http://blynk.cloud/external/api/batch/update?token=%s"
-             "&V0=%.2f&V1=%.2f&V2=%.2f&V3=%.2f&V4=%d&V5=%d&V6=%d",
+             "&V0=%.2f&V1=%.2f&V2=%.2f&V3=%.2f&V4=%d&V6=%d",
              BLYNK_AUTH_TOKEN,
              temperature,
              humidity,
              leaf_wetness,
              soil_moisture,
              p->smith_risk,
-             p->rf_risk,
-             final_risk);
+             p->final_risk);
+    /* V5 (old RF surrogate) is no longer sent. V6 = final risk level from
+     * the node (0 low, 50 early warning, 100 high). */
 #if BLYNK_PUSH_IR_EBH
     if (url_len > 0 && url_len < (int)sizeof(url))
     {
@@ -598,6 +609,13 @@ static void Blynk_Update(const LoRaPayload_t *p, uint8_t final_risk)
     {
         url_len += snprintf(url + url_len, sizeof(url) - (size_t)url_len, "&V8=%u",
                             (unsigned)p->fc_prob);
+    }
+#endif
+#if BLYNK_PUSH_BATTERY
+    if (url_len > 0 && url_len < (int)sizeof(url) && p->battery_mv != 0u)
+    {
+        url_len += snprintf(url + url_len, sizeof(url) - (size_t)url_len, "&V9=%.2f",
+                            (double)p->battery_mv / 1000.0);
     }
 #endif
     if (url_len <= 0 || url_len >= (int)sizeof(url))
@@ -711,7 +729,8 @@ static void ParseAndPrintPayload(const char *raw_packet)
     if (end_quote == NULL)
         return;
     size_t hex_len = end_quote - start_quote;
-    if (hex_len != LORA_PAYLOAD_SIZE * 2 && hex_len != LORA_PAYLOAD_SIZE_LEGACY * 2)
+    if (hex_len != LORA_PAYLOAD_SIZE * 2 && hex_len != LORA_PAYLOAD_SIZE_V16 * 2 &&
+        hex_len != LORA_PAYLOAD_SIZE_LEGACY * 2)
     {
         ESP_LOGE("LORA_RX",
                  "Invalid payload size: %d hex characters.",
@@ -737,6 +756,11 @@ static void ParseAndPrintPayload(const char *raw_packet)
         payload.fc_prob = FC_PROB_NOT_AVAILABLE;
         payload.fc_flags = FC_FLAG_ERROR;
     }
+    if (n_bytes < LORA_PAYLOAD_SIZE)
+    {
+        /* Node firmware before 2026-10-26: no battery bytes. */
+        payload.battery_mv = 0u;
+    }
     float temperature = payload.temperature / 100.0f;
     float humidity = payload.humidity / 100.0f;
     float leaf_wetness = payload.leaf_wetness / 100.0f;
@@ -759,19 +783,26 @@ static void ParseAndPrintPayload(const char *raw_packet)
     ESP_LOGW("LORA_RX", "Received at:   %s", timestamp);
     ESP_LOGW("LORA_RX", "CROP SENSOR DATA RECEIVED:");
     ESP_LOGW("LORA_RX", "  Smith risk:    %d%%", payload.smith_risk);
-    ESP_LOGW("LORA_RX", "  RF risk:       %d%%", payload.rf_risk);
     ESP_LOGW("LORA_RX", "  Temperature:   %.2f C", temperature);
     ESP_LOGW("LORA_RX", "  Humidity:      %.2f %%RH", humidity);
     ESP_LOGW("LORA_RX", "  Leaf Wetness:  %.2f ", leaf_wetness);
     ESP_LOGW("LORA_RX", "  Soil Moisture: %.2f%%", soil_moisture);
     ESP_LOGW("LORA_RX", "  Seq:           %u", (unsigned)payload.seq);
+    if (payload.battery_mv == 0u)
+        ESP_LOGW("LORA_RX", "  Battery:       not measured");
+    else
+        ESP_LOGW("LORA_RX", "  Battery:       %.2f V%s", (double)payload.battery_mv / 1000.0,
+                 (payload.battery_mv < NODE_BATTERY_CRITICAL_MV) ? "  CRITICAL - node is protecting the cell"
+                 : (payload.battery_mv < NODE_BATTERY_LOW_MV)    ? "  LOW - charge soon"
+                                                                  : "");
     Check_Sequence(payload.seq);
     Log_Irish_Rules(&payload);
     Log_Forecast(&payload);
+    /* Final risk level decided on the node (byte 1); forwarded unchanged. */
+    ESP_LOGW("FINAL_RISK", "  Final risk level: %u -> %s",
+             (unsigned)payload.final_risk, final_risk_text(payload.final_risk));
     ESP_LOGW("LORA_RX", "=======================================");
-    uint8_t final_risk = execute_meta_classifier(&payload);
-    ESP_LOGW("META_AI", "Final validated risk: %d%%", final_risk);
-    Blynk_Update(&payload, final_risk);
+    Blynk_Update(&payload);
 }
 
 /* ==================== LORA INITIALIZATION ==================== */

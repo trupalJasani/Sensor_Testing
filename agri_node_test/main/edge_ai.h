@@ -22,16 +22,36 @@
  * Leaf is "wet" when the Davis index (0..15, see leaf_wetness.c) is at or
  * above this value. Used by SWD, the heuristic, TomCast and the Irish Rules.
  *
- * PLACEHOLDER: 7.5 is the midpoint of the index scale, not a calibrated
- * value. Replace it with a threshold derived from field logs of the
- * installed sensor (raw counts vs. observed dew/rain on the leaves).
+ * PROVISIONAL (2026-10-26, was the 7.5 placeholder): index 3.0 = about
+ * 2891 raw counts with the rev B calibration (DRY 2995.0 / WET 2477.7,
+ * leaf_wetness_cal_revB). Reasons:
+ *   - a dried grid with a residue film read 2915..2950 counts (index
+ *     1.3..2.6): it must stay "dry";
+ *   - in the one valid indoor drying run the grid looked dry close to this
+ *     level, and single drops already pull the reading below it.
+ * Only ONE valid drying run and one dew-free outdoor night back this value.
+ * Re-check it with more drying runs and real dew/rain nights before the
+ * thesis results depend on it.
  * Unit is the 0..15 INDEX - never the x100 payload value (bug F1 was a
  * threshold of 1500 compared against this index).
  */
-#define EDGE_AI_LEAF_WET_INDEX_THRESHOLD 7.5f
+#define EDGE_AI_LEAF_WET_INDEX_THRESHOLD 3.0f
 
 /** Irish Rules parameter set used on the node (see late_blight_ir.h). */
 #define EDGE_AI_IR_PRESET IR_PRESET_BOURKE_ORIGINAL
+
+/**
+ * Final risk level sent in payload byte 1 (since 2026-11-04; replaces the
+ * random-forest surrogate of the Smith rule). Rule-based, not a probability:
+ *   HIGH  (100): a risk period has happened - Irish Rules EBH (48 h max)
+ *                >= EDGE_AI_IR_EBH_WARNING, or a full Smith Period;
+ *   EARLY  (50): the 24-h forecast warning bit is set;
+ *   LOW     (0): neither.
+ */
+#define EDGE_AI_IR_EBH_WARNING  12u   /**< EBH warning threshold (Met Eireann practice). */
+#define FINAL_RISK_LOW           0u
+#define FINAL_RISK_EARLY_WARNING 50u
+#define FINAL_RISK_HIGH          100u
 
 /* Bits of the Irish Rules status byte sent in the LoRa payload (byte 13).
  * The gateway decodes the same bits - keep both copies identical. */
@@ -157,7 +177,8 @@ uint8_t run_trained_tomcast_dpd_rf(float *temp_history, float *hum_history, floa
  *        evaluated by components/late_blight_ir.
  * @note  The output is "effective blight hours" (EBH): hours favourable
  *        for infection. The warning threshold (12 EBH at Met Eireann,
- *        4-11 EBH proposed by Cucak et al.) is applied at the gateway.
+ *        4-11 EBH proposed by Cucak et al.) is applied on the node in
+ *        compute_final_risk() (EDGE_AI_IR_EBH_WARNING).
  *        EBH is not a disease probability.
  * @param temp_history   Pointer to the 48-hour temperature ring buffer.
  * @param hum_history    Pointer to the 48-hour humidity ring buffer.
@@ -187,5 +208,18 @@ int32_t run_irish_rules_risk(float *temp_history, float *hum_history, float *lea
  */
 int32_t run_blight_forecast(float *temp_history, float *hum_history, float *leaf_history, int current_index,
                             edge_ai_fc_output_t *out, int64_t (*clock_us)(void));
+
+/**
+ * @brief Combines the three risk models into one final risk level for
+ *        payload byte 1. The rules confirm that a risk period HAS happened
+ *        (high); the forecast warns that one is EXPECTED (early warning).
+ *        A model that reports an error is ignored.
+ * @param smith_score  Result of calculate_smith_period() (0/50/100).
+ * @param ir           Irish Rules output (may be NULL = not available).
+ * @param fc           Forecast output (may be NULL = not available).
+ * @return FINAL_RISK_HIGH, FINAL_RISK_EARLY_WARNING or FINAL_RISK_LOW.
+ */
+uint8_t compute_final_risk(uint8_t smith_score, const edge_ai_ir_output_t *ir,
+                           const edge_ai_fc_output_t *fc);
 
 #endif /* EDGE_AI_H */
