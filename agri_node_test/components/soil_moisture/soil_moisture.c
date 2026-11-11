@@ -28,8 +28,8 @@ int32_t SoilMoisture_Init(SoilMoisture_Object_t *pObj) {
     if (pObj == NULL) return SOIL_ERROR;
 
     /* Capacitive sensors usually read high in air, low in water */
-    pObj->cal_air_value   = 2800; // Dry
-    pObj->cal_water_value = 1200; // Wet
+    pObj->cal_air_value   = 3259; // Air, rev B, calibrated 2026-11-11 (T5)
+    pObj->cal_water_value = 1593; // Water, rev B, calibrated 2026-11-11 (T5)
     
     pObj->is_initialized = 1;
     return SOIL_OK;

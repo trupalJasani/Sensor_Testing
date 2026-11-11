@@ -1,0 +1,143 @@
+Script started on 2026-11-11 12:45:45+01:00 [COMMAND="idf.py -p /dev/ttyACM0 monitor" TERM="xterm-256color" TTY="/dev/pts/0" COLUMNS="80" LINES="24"]
+Executing action: monitor
+Running idf_monitor in directory /home/trupal/esp_Project/Testting_components/agrinode_revB_bringup
+Executing "/home/trupal/.espressif/python_env/idf5.4_py3.12_env/bin/python /home/trupal/esp/v5.4.1/esp-idf/tools/idf_monitor.py -p /dev/ttyACM0 -b 115200 --toolchain-prefix riscv32-esp-elf- --target esp32c3 --revision 3 --decode-panic backtrace /home/trupal/esp_Project/Testting_components/agrinode_revB_bringup/build/agrinode_revB_bringup.elf -m '/home/trupal/.espressif/python_env/idf5.4_py3.12_env/bin/python' '/home/trupal/esp/v5.4.1/esp-idf/tools/idf.py' '-p' '/dev/ttyACM0'"...
+[0;33m--- esp-idf-monitor 1.9.0 on /dev/ttyACM0 115200[0m
+[0;33m--- Quit: Ctrl+] | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H[0m
+ESP-ROM:esp32c3-api1-20210207
+Build:Feb  7 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0xd (SPI_FAST_FLASH_BOOT)
+Saved PC:0x40383a44
+[0m--- 0x40383a44: [0;33mprvGetCurMaxSizeAllowSplit[0m[0m at [0;32m/home/trupal/esp/v5.4.1/esp-idf/components/esp_ringbuf/ringbuf.c[0m[0m:[1;31m723[0m
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fcd5820,len:0x1574
+load:0x403cc710,len:0xba4
+load:0x403ce710,len:0x2fb4
+entry 0x403cc71a
+[0;32mI (24) boot: ESP-IDF v5.4.1-dirty 2nd stage bootloader[0m
+[0;32mI (24) boot: compile time Oct 26 2026 14:21:22[0m
+[0;32mI (24) boot: chip revision: v0.4[0m
+[0;32mI (25) boot: efuse block revision: v1.3[0m
+[0;32mI (25) boot.esp32c3: SPI Speed      : 80MHz[0m
+[0;32mI (25) boot.esp32c3: SPI Mode       : DIO[0m
+[0;32mI (25) boot.esp32c3: SPI Flash Size : 4MB[0m
+[0;32mI (25) boot: Enabling RNG early entropy source...[0m
+[0;32mI (25) boot: Partition Table:[0m
+[0;32mI (25) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (26) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (26) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (26) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (26) boot: End of partition table[0m
+[0;32mI (26) esp_image: segment 0: paddr=00010020 vaddr=3c030020 size=17470h ( 95344) map[0m
+[0;32mI (42) esp_image: segment 1: paddr=00027498 vaddr=3fc8ea00 size=01478h (  5240) load[0m
+[0;32mI (43) esp_image: segment 2: paddr=00028918 vaddr=40380000 size=07700h ( 30464) load[0m
+[0;32mI (49) esp_image: segment 3: paddr=00030020 vaddr=42000020 size=2be80h (179840) map[0m
+[0;32mI (78) esp_image: segment 4: paddr=0005bea8 vaddr=40387700 size=07248h ( 29256) load[0m
+[0;32mI (84) esp_image: segment 5: paddr=000630f8 vaddr=50000000 size=00b24h (  2852) load[0m
+[0;32mI (89) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (90) boot: Disabling RNG early entropy source...[0m
+[0;32mI (90) cpu_start: Unicore app[0m
+[0;32mI (98) cpu_start: Pro cpu start user code[0m
+[0;32mI (98) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (99) app_init: Application information:[0m
+[0;32mI (99) app_init: Project name:     agri_node_test[0m
+[0;32mI (99) app_init: App version:      1[0m
+[0;32mI (99) app_init: Compile time:     Oct 26 2026 14:21:20[0m
+[0;32mI (99) app_init: ELF file SHA256:  46260ebe0...[0m
+[0;33m--- Warning: Checksum mismatch between flashed and built applications. Checksum of built application is 1255d716c83e16d6f290cd494998887fccbbcfd53591795486bb1ee2893d7562[0m
+[0;32mI (99) app_init: ESP-IDF:          v5.4.1-dirty[0m
+[0;32mI (99) efuse_init: Min chip rev:     v0.3[0m
+[0;32mI (99) efuse_init: Max chip rev:     v1.99 [0m
+[0;32mI (99) efuse_init: Chip rev:         v0.4[0m
+[0;32mI (99) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (100) heap_init: At 3FC91ED0 len 0002E130 (184 KiB): RAM[0m
+[0;32mI (100) heap_init: At 3FCC0000 len 0001C710 (113 KiB): Retention RAM[0m
+[0;32mI (100) heap_init: At 3FCDC710 len 00002950 (10 KiB): Retention RAM[0m
+[0;32mI (100) heap_init: At 50000B24 len 000014C4 (5 KiB): RTCRAM[0m
+[0;32mI (101) spi_flash: detected chip: generic[0m
+[0;32mI (101) spi_flash: flash io: dio[0m
+[0;32mI (102) sleep_gpio: Configure to isolate all GPIO pins in sleep state[0m
+[0;32mI (102) sleep_gpio: Enable automatic switching of GPIO sleep configuration[0m
+[0;32mI (102) main_task: Started on CPU0[0m
+[0;32mI (102) main_task: Calling app_main()[0m
+[0;32mI (102) gpio: GPIO[7]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (102) gpio: GPIO[20]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (102) gpio: GPIO[21]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (102) gpio: GPIO[5]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (102) gpio: GPIO[6]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (102) gpio: GPIO[10]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (102) gpio: GPIO[2]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 [0m
+[0;32mI (2102) AGRI_NODE_FSM: >>> STATE: INIT[0m
+[0;33mW (2102) AGRI_NODE_FSM: Unexpected reset (esp_reset_reason = 11): resuming the duty cycle without operator confirmation.[0m
+[0;32mI (2102) AGRI_NODE_FSM: History recovered from NVS. Resuming at index 163[0m
+[0;32mI (2102) gpio: GPIO[0]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2102) gpio: GPIO[1]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2102) gpio: GPIO[4]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2102) AGRI_NODE_FSM: Battery: 4512 mV (~100 % at rest; 2256 mV at GPIO4)[0m
+[0;32mI (2102) gpio: GPIO[7]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2332) gpio: GPIO[7]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2332) AGRI_NODE_FSM: Sensor power ON (soft start 227 ms, rail up after 18 ms).[0m
+[0;32mI (2332) AGRI_NODE_FSM: Wio-E5 power ON (booting).[0m
+[0;32mI (2332) AGRI_NODE_FSM: Waiting 2000 ms for sensor power stabilization...[0m
+[0;32mI (4352) AGRI_NODE_FSM: All sensors initialized successfully.[0m
+[0;32mI (4352) AGRI_NODE_FSM: >>> STATE: READ SENSORS[0m
+[0;32mI (4372) AGRI_NODE_FSM: Temp: 22.56 C | Hum: 79.93 %RH[0m
+[0;32mI (4372) AGRI_NODE_FSM: Soil Moisture: 0.00%[0m
+[1;31mE (4372) AGRI_NODE_FSM: Leaf wetness sensor NOT CONNECTED? raw 4 < 1000. Using index 0 (dry).[0m
+[0;32mI (4372) AGRI_NODE_FSM: >>> STATE: PROCESS DATA (Running Edge AI)[0m
+[0;32mI (4372) EDGE_AI: RF Data - Avg T: 23.8, Avg H: 78.8, SWD: 35.75 hrs -> AI Risk: 45%[0m
+[0;32mI (4372) EDGE_AI: Irish Rules (48h) - favourable=24h wet=37h sporulations=1 starts wet/dry=1/0 EBH max=13 now=13 gap=1h flags=0x01[0m
+[0;32mI (4372) EDGE_AI: Forecast next 24h - Smith-day probability 56% (threshold 26%) -> WARNING | features 479 us, forest 387 us | RF10x8 smith24h DWD04104 train1948-2004 thr0.26[0m
+[0;32mI (4372) AGRI_NODE_FSM: Model comparison - Smith: 50% | Heuristic: 45% | Irish Rules EBH max/now: 13/13 | Forecast 24h: 56%[0m
+[0;32mI (4382) AGRI_NODE_FSM: Final risk level: 100 (HIGH - risk period happened)[0m
+[0;32mI (4452) AGRI_NODE_FSM: History safely committed to NVS Flash.[0m
+[0;32mI (4452) AGRI_NODE_FSM: >>> STATE: TRANSMIT[0m
+[0;32mI (4572) AGRI_NODE_FSM: Wio-E5 ready 2240 ms after power-on.[0m
+[0;32mI (5152) AGRI_NODE_FSM: Broadcasting 18-Byte Payload...[0m
+[0;32mI (5992) AGRI_NODE_FSM: Radio Response: +TEST: TXLRPKT "3264D008391F0000000000000D013811A011"  +TEST: TX DONE  [0m
+[0;32mI (5992) gpio: GPIO[5]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5992) gpio: GPIO[6]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5992) AGRI_NODE_FSM: Wio-E5 power OFF.[0m
+[0;32mI (5992) AGRI_NODE_FSM: >>> STATE: IDLE (Preparing for Deep Sleep)[0m
+[0;32mI (5992) gpio: GPIO[5]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5992) gpio: GPIO[6]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5992) gpio: GPIO[20]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5992) gpio: GPIO[21]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5992) gpio: GPIO[7]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5992) AGRI_NODE_FSM: Sensor power OFF.[0m
+[0;32mI (6042) AGRI_NODE_FSM: Main task stack: 1940 bytes never used (of 3584)[0m
+[0;32mI (6042) AGRI_NODE_FSM: Entering Deep Sleep Now (900 s)...[0m
+[1;31m--- Error: device reports readiness to read but returned no data (device disconnected or multiple access on port?)[0m
+[0;33m--- Waiting for the device to reconnect[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m.[0m[0;33m[0m
+[0;32mI (2106) AGRI_NODE_FSM: >>> STATE: INIT[0m
+[0;33mW (2106) AGRI_NODE_FSM: Wakeup triggered by MANUAL BUTTON PRESS on GPIO2![0m
+[0;32mI (2106) gpio: GPIO[0]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2106) gpio: GPIO[1]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2106) gpio: GPIO[4]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2106) AGRI_NODE_FSM: Battery: 4168 mV (~97 % at rest; 2084 mV at GPIO4)[0m
+[0;32mI (2106) gpio: GPIO[7]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2336) gpio: GPIO[7]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (2336) AGRI_NODE_FSM: Sensor power ON (soft start 227 ms, rail up after 18 ms).[0m
+[0;32mI (2336) AGRI_NODE_FSM: Wio-E5 power ON (booting).[0m
+[0;32mI (2336) AGRI_NODE_FSM: Waiting 2000 ms for sensor power stabilization...[0m
+[0;32mI (4356) AGRI_NODE_FSM: All sensors initialized successfully.[0m
+[0;32mI (4356) AGRI_NODE_FSM: >>> STATE: READ SENSORS[0m
+[0;32mI (4376) AGRI_NODE_FSM: Temp: 22.72 C | Hum: 79.44 %RH[0m
+[0;32mI (4376) AGRI_NODE_FSM: Soil Moisture: 0.00%[0m
+[1;31mE (4376) AGRI_NODE_FSM: Leaf wetness sensor NOT CONNECTED? raw 4 < 1000. Using index 0 (dry).[0m
+[0;32mI (4376) AGRI_NODE_FSM: >>> STATE: PROCESS DATA (Running Edge AI)[0m
+[0;32mI (4376) EDGE_AI: RF Data - Avg T: 23.8, Avg H: 78.9, SWD: 35.50 hrs -> AI Risk: 45%[0m
+[0;32mI (4376) EDGE_AI: Irish Rules (48h) - favourable=24h wet=37h sporulations=1 starts wet/dry=1/0 EBH max=13 now=13 gap=1h flags=0x01[0m
+[0;32mI (4376) EDGE_AI: Forecast next 24h - Smith-day probability 57% (threshold 26%) -> WARNING | features 479 us, forest 388 us | RF10x8 smith24h DWD04104 train1948-2004 thr0.26[0m
+[0;32mI (4376) AGRI_NODE_FSM: Model comparison - Smith: 50% | Heuristic: 45% | Irish Rules EBH max/now: 13/13 | Forecast 24h: 57%[0m
+[0;32mI (4386) AGRI_NODE_FSM: Final risk level: 100 (HIGH - risk period happened)[0m
+[0;32mI (4406) AGRI_NODE_FSM: History safely committed to NVS Flash.[0m
+[0;32mI (4406) AGRI_NODE_FSM: >>> STATE: TRANSMIT[0m
+[0;32mI (4536) AGRI_NODE_FSM: Wio-E5 ready 2200 ms after power-on.[0m
+[0;32mI (5116) AGRI_NODE_FSM: Broadcasting 18-Byte Payload...[0m
+[0;32mI (5956) AGRI_NODE_FSM: Radio Response: +TEST: TXLRPKT "3264DF08081F0000000001000D0139114810"  +TEST: TX DONE  [0m
+[0;32mI (5956) gpio: GPIO[5]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5956) gpio: GPIO[6]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (5956) AGRI_NODE_FSM: Wio-E5 power OFF.[0m
+[0;32mI (5956) AGRI_NODE_FSM: >>> STATE: IDLE (Preparing for Deep 
